@@ -1,3 +1,0 @@
-var x: int;
-var y: int;
-var z: char;
