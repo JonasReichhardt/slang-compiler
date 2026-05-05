@@ -85,7 +85,7 @@ impl SemanticAnalyzer {
                         .symbols
                         .insert(lname.clone(), Symbol::Var { typ: ltype.clone() })
                     {
-                        self.error(format!("Redefined parameter {}", name));
+                        self.error(format!("Redefined local variable {}", name));
                     }
                 }
 
