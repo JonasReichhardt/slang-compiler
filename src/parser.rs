@@ -5,6 +5,8 @@
 use crate::Scanner;
 use crate::structs::*;
 
+type FnSignature = (Vec<(String, String)>, Option<String>);
+
 #[derive(Debug, Clone)]
 pub struct ParseError {
     pub message: String,
@@ -12,15 +14,20 @@ pub struct ParseError {
     pub col: usize,
 }
 
-pub struct ParseResult {
-    pub ast: Vec<Declaration>,
-    pub errors: Vec<ParseError>,
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "slang: {}:{} {}", self.line, self.col, self.message)
+    }
 }
 
 pub struct Parser<'a> {
     scanner: Scanner<'a>,
     current: SpannedToken,
     errors: Vec<ParseError>,
+}
+
+fn is_declaration_start(tok: &Token) -> bool {
+    matches!(tok, Token::Var | Token::Fn)
 }
 
 impl<'a> Parser<'a> {
@@ -58,7 +65,7 @@ impl<'a> Parser<'a> {
         });
     }
 
-    fn synchronize(&mut self) {
+    fn synchronize_statement(&mut self) {
         while self.current.token != Token::Semicolon
             && self.current.token != Token::RBrace
             && self.current.token != Token::EOF
@@ -71,30 +78,37 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn synchronize_declaration(&mut self) {
+        while !is_declaration_start(&self.current.token) && self.current.token != Token::EOF {
+            self.advance();
+        }
+    }
+
     fn expect_ident(&mut self) -> String {
         if let Token::Ident(s) = self.current.token.clone() {
             self.advance();
             s
         } else {
-            self.error(format!("Expected identifier"));
+            self.error("Expected identifier".to_string());
             "".to_owned()
         }
     }
 
-    pub fn parse_program(&mut self) -> ParseResult {
+    pub fn parse_program(&mut self) -> Result<Vec<Declaration>, Vec<ParseError>> {
         let mut decls = Vec::new();
 
         while self.current.token != Token::EOF {
             if let Some(d) = self.parse_declaration() {
                 decls.push(d);
             } else {
-                self.synchronize();
+                self.synchronize_declaration();
             }
         }
 
-        ParseResult {
-            ast: decls,
-            errors: self.errors.clone(),
+        if self.errors.is_empty() {
+            Ok(decls)
+        } else {
+            Err(self.errors.clone())
         }
     }
 
@@ -112,18 +126,20 @@ impl<'a> Parser<'a> {
             Token::Fn => {
                 self.advance();
                 let name = self.expect_ident();
-                let (params, ret) = self.parse_parameters()?;
+                let (params, ret) = self.parse_parameters().ok()?;
 
                 self.expect(Token::LBrace);
 
                 let mut locals = Vec::new();
                 while self.current.token == Token::Var {
-                    if let Declaration::Var(n, t) = self.parse_declaration()? {
+                    if let Some(Declaration::Var(n, t)) = self.parse_declaration() {
                         locals.push((n, t));
+                    } else {
+                        self.synchronize_declaration();
                     }
                 }
 
-                let body = self.parse_stat_seq()?;
+                let body = self.parse_stat_seq();
                 self.expect(Token::RBrace);
 
                 Some(Declaration::Fn {
@@ -136,13 +152,13 @@ impl<'a> Parser<'a> {
             }
 
             _ => {
-                self.error(format!("Expected declaration"));
+                self.error("Expected declaration".to_string());
                 None
             }
         }
     }
 
-    fn parse_parameters(&mut self) -> Result<(Vec<(String, String)>, Option<String>), ()> {
+    fn parse_parameters(&mut self) -> Result<FnSignature, ()> {
         let mut params = Vec::new();
 
         self.expect(Token::LParen);
@@ -171,15 +187,21 @@ impl<'a> Parser<'a> {
         Ok((params, ret))
     }
 
-    fn parse_stat_seq(&mut self) -> Result<Vec<Statement>, ()> {
+    fn parse_stat_seq(&mut self) -> Vec<Statement> {
         let mut stmts = Vec::new();
-        while self.current.token != Token::RBrace {
-            stmts.push(self.parse_statement()?);
+
+        while self.current.token != Token::RBrace && self.current.token != Token::EOF {
+            if let Some(stmt) = self.parse_statement() {
+                stmts.push(stmt);
+            } else {
+                self.synchronize_statement();
+            }
         }
-        Ok(stmts)
+
+        stmts
     }
 
-    fn parse_statement(&mut self) -> Result<Statement, ()> {
+    fn parse_statement(&mut self) -> Option<Statement> {
         match self.current.token.clone() {
             Token::Ident(name) => {
                 self.advance();
@@ -187,48 +209,48 @@ impl<'a> Parser<'a> {
                 if self.current.token == Token::Assign {
                     self.advance();
                     let expr = self.parse_expression()?;
-                    self.expect(Token::Semicolon)?;
-                    Ok(Statement::Assign(name, expr))
+                    self.expect(Token::Semicolon);
+                    Some(Statement::Assign(name, expr))
                 } else {
                     let args = self.parse_act_parameters()?;
-                    self.expect(Token::Semicolon)?;
-                    Ok(Statement::Call(name, args))
+                    self.expect(Token::Semicolon);
+                    Some(Statement::Call(name, args))
                 }
             }
 
             Token::If => {
                 self.advance();
-                self.expect(Token::LParen)?;
+                self.expect(Token::LParen);
                 let cond = self.parse_condition()?;
-                self.expect(Token::RParen)?;
-                self.expect(Token::LBrace)?;
-                let body = self.parse_stat_seq()?;
-                self.expect(Token::RBrace)?;
+                self.expect(Token::RParen);
+                self.expect(Token::LBrace);
+                let body = self.parse_stat_seq();
+                self.expect(Token::RBrace);
 
                 let mut branches = vec![(cond, body)];
 
                 while self.current.token == Token::ElseIf {
                     self.advance();
-                    self.expect(Token::LParen)?;
+                    self.expect(Token::LParen);
                     let cond = self.parse_condition()?;
-                    self.expect(Token::RParen)?;
-                    self.expect(Token::LBrace)?;
-                    let body = self.parse_stat_seq()?;
-                    self.expect(Token::RBrace)?;
+                    self.expect(Token::RParen);
+                    self.expect(Token::LBrace);
+                    let body = self.parse_stat_seq();
+                    self.expect(Token::RBrace);
                     branches.push((cond, body));
                 }
 
                 let else_branch = if self.current.token == Token::Else {
                     self.advance();
-                    self.expect(Token::LBrace)?;
-                    let body = self.parse_stat_seq()?;
-                    self.expect(Token::RBrace)?;
+                    self.expect(Token::LBrace);
+                    let body = self.parse_stat_seq();
+                    self.expect(Token::RBrace);
                     Some(body)
                 } else {
                     None
                 };
 
-                Ok(Statement::If {
+                Some(Statement::If {
                     branches,
                     else_branch,
                 })
@@ -236,13 +258,13 @@ impl<'a> Parser<'a> {
 
             Token::While => {
                 self.advance();
-                self.expect(Token::LParen)?;
+                self.expect(Token::LParen);
                 let cond = self.parse_condition()?;
-                self.expect(Token::RParen)?;
-                self.expect(Token::LBrace)?;
-                let body = self.parse_stat_seq()?;
-                self.expect(Token::RBrace)?;
-                Ok(Statement::While { cond, body })
+                self.expect(Token::RParen);
+                self.expect(Token::LBrace);
+                let body = self.parse_stat_seq();
+                self.expect(Token::RBrace);
+                Some(Statement::While { cond, body })
             }
 
             Token::Return => {
@@ -252,30 +274,30 @@ impl<'a> Parser<'a> {
                 } else {
                     None
                 };
-                self.expect(Token::Semicolon)?;
-                Ok(Statement::Return(expr))
+                self.expect(Token::Semicolon);
+                Some(Statement::Return(expr))
             }
 
             _ => {
-                self.error(format!("Invalid statement"));
-                Err(())
+                self.error("Invalid statement".to_string());
+                None
             }
         }
     }
 
-    fn parse_condition(&mut self) -> Result<Expr, ()> {
+    fn parse_condition(&mut self) -> Option<Expr> {
         let left = self.parse_expression()?;
         let op = self.parse_relop()?;
         let right = self.parse_expression()?;
 
-        Ok(Expr::Binary {
+        Some(Expr::Binary {
             left: Box::new(left),
             op,
             right: Box::new(right),
         })
     }
 
-    fn parse_relop(&mut self) -> Result<BinaryOp, ()> {
+    fn parse_relop(&mut self) -> Option<BinaryOp> {
         let op = match self.current.token {
             Token::Assign => BinaryOp::Eq,
             Token::Neq => BinaryOp::Neq,
@@ -284,15 +306,15 @@ impl<'a> Parser<'a> {
             Token::Le => BinaryOp::Le,
             Token::Ge => BinaryOp::Ge,
             _ => {
-                self.error(format!("Expected relop"));
-                return Err(());
+                self.error("Expected relop".to_string());
+                return None;
             }
         };
         self.advance();
-        Ok(op)
+        Some(op)
     }
 
-    fn parse_expression(&mut self) -> Result<Expr, ()> {
+    fn parse_expression(&mut self) -> Option<Expr> {
         let mut expr = self.parse_term()?;
 
         while matches!(self.current.token, Token::Plus | Token::Minus) {
@@ -302,6 +324,7 @@ impl<'a> Parser<'a> {
                 _ => unreachable!(),
             };
             self.advance();
+
             let right = self.parse_term()?;
             expr = Expr::Binary {
                 left: Box::new(expr),
@@ -310,10 +333,10 @@ impl<'a> Parser<'a> {
             };
         }
 
-        Ok(expr)
+        Some(expr)
     }
 
-    fn parse_term(&mut self) -> Result<Expr, ()> {
+    fn parse_term(&mut self) -> Option<Expr> {
         let mut expr = self.parse_factor()?;
 
         while matches!(
@@ -335,48 +358,48 @@ impl<'a> Parser<'a> {
             };
         }
 
-        Ok(expr)
+        Some(expr)
     }
 
-    fn parse_factor(&mut self) -> Result<Expr, ()> {
+    fn parse_factor(&mut self) -> Option<Expr> {
         match self.current.token.clone() {
             Token::Ident(name) => {
                 self.advance();
                 if self.current.token == Token::LParen {
                     let args = self.parse_act_parameters()?;
-                    Ok(Expr::Call(name, args))
+                    Some(Expr::Call(name, args))
                 } else {
-                    Ok(Expr::Ident(name))
+                    Some(Expr::Ident(name))
                 }
             }
 
             Token::Number(n) => {
                 self.advance();
-                Ok(Expr::Number(n))
+                Some(Expr::Number(n))
             }
 
             Token::Char(c) => {
                 self.advance();
-                Ok(Expr::Char(c))
+                Some(Expr::Char(c))
             }
 
             Token::LParen => {
                 self.advance();
                 let expr = self.parse_expression()?;
-                self.expect(Token::RParen)?;
-                Ok(expr)
+                self.expect(Token::RParen);
+                Some(expr)
             }
 
             _ => {
-                self.error(format!("Invalid factor"));
-                Err(())
+                self.error("Invalid factor".to_string());
+                None
             }
         }
     }
 
-    fn parse_act_parameters(&mut self) -> Result<Vec<Expr>, ()> {
+    fn parse_act_parameters(&mut self) -> Option<Vec<Expr>> {
         let mut args = Vec::new();
-        self.expect(Token::LParen)?;
+        self.expect(Token::LParen);
 
         if self.current.token != Token::RParen {
             loop {
@@ -388,7 +411,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.expect(Token::RParen)?;
-        Ok(args)
+        self.expect(Token::RParen);
+        Some(args)
     }
 }

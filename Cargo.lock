@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "slang-compiler"
+name = "slang"
 version = "0.1.0"

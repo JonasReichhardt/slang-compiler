@@ -1,14 +1,17 @@
 mod parser;
 mod scanner;
+mod sematics;
 mod structs;
+mod symtab;
+
+pub use crate::parser::*;
+pub use crate::scanner::*;
+pub use crate::sematics::*;
+pub use crate::structs::*;
 
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-
-pub use crate::parser::Parser;
-pub use crate::scanner::Scanner;
-pub use crate::structs::Token;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -21,7 +24,11 @@ fn main() {
     if ast.is_ok() {
         dbg!(ast.unwrap());
     } else {
-        println!("{}", ast);
+        let errors = ast.err().unwrap();
+        for err in &errors {
+            println!("{}", err);
+        }
+        println!("slang: Compilation failed with {} errors.", errors.len());
     }
 }
 /*
@@ -32,7 +39,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::structs::*;
+    use crate::parser::ParseError;
 
     fn get_test_programs(path: &str) -> Vec<PathBuf> {
         let dir_path = PathBuf::from(path);
@@ -51,7 +58,7 @@ mod tests {
         programs
     }
 
-    fn parse_program(path: PathBuf) -> Result<Vec<Declaration>, String> {
+    fn parse_program(path: PathBuf) -> Result<Vec<Declaration>, Vec<ParseError>> {
         let src_str = fs::read_to_string(&path).expect("slang: could not read file");
         let scanner = Scanner::new(&src_str);
         let mut parser = Parser::new(scanner);
