@@ -51,8 +51,7 @@ mod semantic_tests {
         let semantic_res = analyzer.analyze_program(&ast);
 
         match semantic_res {
-            Ok(sym) => {
-                println!("Incorrect symbol table {:?}", sym);
+            Ok(_) => {
                 assert!(false);
             }
             Err(errors) => {
@@ -65,6 +64,94 @@ mod semantic_tests {
     }
 
     // Semantic tests - START
+
+    #[test]
+    fn valid_int_assignment() {
+        analyze_ok(
+            "
+                fn main() {
+                    var x: int;
+                    x = 5;
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn valid_char_assignment() {
+        analyze_ok(
+            "
+                fn main() {
+                    var c: char;
+                    c = 'a';
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn valid_arithmetic_expression() {
+        analyze_ok(
+            "
+                fn main() {
+                    var x: int;
+                    x = 1 + 2 * 3;
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn valid_comparison() {
+        analyze_ok(
+            "
+                fn main() {
+                    if (1 < 2) {
+                        return;
+                    }
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn valid_function_call_types() {
+        analyze_ok(
+            "
+                fn foo(a: int, b: int) {
+                    return;
+                }
+
+                fn main() {
+                    foo(1, 2);
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn valid_return_type() {
+        analyze_ok(
+            "
+                fn foo(): int {
+                    return 5;
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn valid_char_comparison() {
+        analyze_ok(
+            "
+                fn main() {
+                    if ('a' = 'b') {
+                        return;
+                    }
+                }
+            ",
+        );
+    }
 
     #[test]
     fn test_valid_simple_assignment() {
@@ -296,6 +383,130 @@ mod semantic_tests {
                 foo(1);
             }
         ",
+        );
+    }
+
+    #[test]
+    fn error_assign_char_to_int() {
+        analyze_err(
+            "
+                fn main() {
+                    var x: int;
+                    x = 'a';
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn error_assign_int_to_char() {
+        analyze_err(
+            "
+                fn main() {
+                    var c: char;
+                    c = 5;
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn error_arithmetic_with_char() {
+        analyze_err(
+            "
+                fn main() {
+                    var x: int;
+                    x = 'a' + 1;
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn error_mixed_comparison() {
+        analyze_err(
+            "
+                fn main() {
+                    if (1 = 'a') {
+                        return;
+                    }
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn error_wrong_argument_type() {
+        analyze_err(
+            "
+                fn foo(a: int) {
+                    return;
+                }
+
+                fn main() {
+                    foo('a');
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn error_wrong_return_type() {
+        analyze_err(
+            "
+                fn foo(): int {
+                    return 'a';
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn error_missing_return_value() {
+        analyze_err(
+            "
+                fn foo(): int {
+                    return;
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn error_unexpected_return_value() {
+        analyze_err(
+            "
+                fn foo() {
+                    return 5;
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn error_binary_op_type_mismatch() {
+        analyze_err(
+            "
+                fn main() {
+                    var x: int;
+                    x = 1 + 'a';
+                }
+            ",
+        );
+    }
+
+    #[test]
+    fn error_function_argument_mismatch_multiple() {
+        analyze_err(
+            "
+                fn foo(a: int, b: char) {
+                    return;
+                }
+
+                fn main() {
+                    foo(1, 2);
+                }
+            ",
         );
     }
 
