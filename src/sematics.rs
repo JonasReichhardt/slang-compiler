@@ -102,8 +102,13 @@ impl SemanticAnalyzer {
     fn analyze_statement(&mut self, stmt: &Statement) {
         match stmt {
             Statement::Assign(name, expr) => {
-                if self.symbols.lookup(name).is_none() {
-                    self.error(format!("Undefined variable {}", name));
+                match self.symbols.lookup(name) {
+                    Some(sym) => {
+                        if matches!(sym, Symbol::Fn { .. }) {
+                            self.error(format!("Cannot assign to function {}", name))
+                        }
+                    }
+                    None => self.error(format!("Undefined variable {}", name)),
                 }
 
                 self.analyze_expr(expr);

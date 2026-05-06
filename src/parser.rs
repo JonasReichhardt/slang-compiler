@@ -279,7 +279,7 @@ impl<'a> Parser<'a> {
             }
 
             _ => {
-                self.error("Invalid statement".to_string());
+                self.error(format!("Invalid statement"));
                 None
             }
         }
