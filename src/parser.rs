@@ -285,26 +285,22 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_condition(&mut self) -> Option<Expr> {
+    fn parse_condition(&mut self) -> Option<Condition> {
         let left = self.parse_expression()?;
         let op = self.parse_relop()?;
         let right = self.parse_expression()?;
 
-        Some(Expr::Binary {
-            left: Box::new(left),
-            op,
-            right: Box::new(right),
-        })
+        Some(Condition { left, op, right })
     }
 
-    fn parse_relop(&mut self) -> Option<BinaryOp> {
+    fn parse_relop(&mut self) -> Option<RelOp> {
         let op = match self.current.token {
-            Token::Assign => BinaryOp::Eq,
-            Token::Neq => BinaryOp::Neq,
-            Token::Lt => BinaryOp::Lt,
-            Token::Gt => BinaryOp::Gt,
-            Token::Le => BinaryOp::Le,
-            Token::Ge => BinaryOp::Ge,
+            Token::Assign => RelOp::Eq,
+            Token::Neq => RelOp::Neq,
+            Token::Lt => RelOp::Lt,
+            Token::Gt => RelOp::Gt,
+            Token::Le => RelOp::Le,
+            Token::Ge => RelOp::Ge,
             _ => {
                 self.error("Expected relop".to_string());
                 return None;

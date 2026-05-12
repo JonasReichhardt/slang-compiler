@@ -26,7 +26,7 @@ fn main() {
         //dbg!(&ast);
         let res = semantics.analyze_program(&ast.unwrap());
         match res {
-            Ok(sym) => println!("{sym:?}"),
+            Ok(_) => (),
             Err(errors) => {
                 for err in &errors {
                     println!("{}", err.message);

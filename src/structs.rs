@@ -45,7 +45,7 @@ pub struct SpannedToken {
     pub col: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Number(i64),
     Char(char),
@@ -63,19 +63,23 @@ pub enum Expr {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum UnaryOp {
     Plus,
     Minus,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BinaryOp {
     Add,
     Sub,
     Mul,
     Div,
     Mod,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RelOp {
     Eq,
     Neq,
     Lt,
@@ -108,11 +112,11 @@ pub enum Statement {
     Assign(String, Expr),
     Call(String, Vec<Expr>),
     If {
-        branches: Vec<(Expr, Vec<Statement>)>,
+        branches: Vec<(Condition, Vec<Statement>)>,
         else_branch: Option<Vec<Statement>>,
     },
     While {
-        cond: Expr,
+        cond: Condition,
         body: Vec<Statement>,
     },
     Return(Option<Expr>),
@@ -128,4 +132,11 @@ pub enum Declaration {
         locals: Vec<(String, Type)>,
         body: Vec<Statement>,
     },
+}
+
+#[derive(Debug, Clone)]
+pub struct Condition {
+    pub left: Expr,
+    pub op: RelOp,
+    pub right: Expr,
 }

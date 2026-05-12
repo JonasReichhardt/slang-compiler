@@ -1,6 +1,5 @@
 use crate::{structs::*, symtab::*};
 
-
 #[derive(Debug, Clone)]
 pub struct SemanticError {
     pub message: String,
@@ -140,10 +139,13 @@ impl SemanticAnalyzer {
                 }
             },
 
-            Statement::Call(name, args) => Some(self.analyze_func_call(name, args)),
+            Statement::Call(name, args) => {
+                let _ = self.analyze_func_call(name, args);
+                None
+            }
 
             Statement::While { cond, body } => {
-                self.analyze_expr(cond);
+                self.analyze_condition(cond);
 
                 self.symbols.enter_scope();
                 for s in body {
@@ -164,7 +166,8 @@ impl SemanticAnalyzer {
                 else_branch,
             } => {
                 let mut ret = None;
-                for (_, stmts) in branches {
+                for (cond, stmts) in branches {
+                    self.analyze_condition(cond);
                     let ret_val = self.analyze_stat_seq(stmts);
                     ret = self.merge_return_types(ret, ret_val);
                 }
@@ -208,6 +211,21 @@ impl SemanticAnalyzer {
             }
         }
         None
+    }
+
+    fn analyze_condition(&mut self, cond: &Condition) {
+        let left = self.analyze_expr(&cond.left);
+
+        let right = self.analyze_expr(&cond.right);
+
+        // Prevent cascading errors
+        if left == Type::Error || right == Type::Error {
+            return;
+        }
+
+        if left != right {
+            self.error(format!("Cannot compare {:?} with {:?}", left, right));
+        }
     }
 
     fn analyze_expr(&mut self, expr: &Expr) -> Type {
