@@ -11,14 +11,12 @@ mod parser_tests {
         let mut parser = Parser::new(scanner);
 
         match parser.parse_program() {
-            Ok(_) => {
-                assert!(true);
-            }
+            Ok(_) => {}
             Err(errors) => {
                 for err in &errors {
                     println!("{}{}:{}", err.line, err.col, err.message);
                 }
-                assert!(false)
+                panic!()
             }
         }
     }
@@ -27,14 +25,9 @@ mod parser_tests {
         let scanner = Scanner::new(input);
         let mut parser = Parser::new(scanner);
 
-        match parser.parse_program() {
-            Ok(ast) => {
-                println!("{:?}", ast);
-                assert!(false);
-            }
-            Err(_) => {
-                assert!(true)
-            }
+        if let Ok(ast) = parser.parse_program() {
+            println!("{ast:?}");
+            panic!()
         }
     }
 

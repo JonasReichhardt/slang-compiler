@@ -84,6 +84,25 @@ pub enum BinaryOp {
     Ge,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Type {
+    Int,
+    Char,
+    Void,
+    Error,
+}
+
+impl From<String> for Type {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "int" => Type::Int,
+            "char" => Type::Char,
+            "void" => Type::Void,
+            _ => Type::Error,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Statement {
     Assign(String, Expr),
@@ -101,12 +120,12 @@ pub enum Statement {
 
 #[derive(Debug)]
 pub enum Declaration {
-    Var(String, String),
+    Var(String, Type),
     Fn {
         name: String,
-        params: Vec<(String, String)>,
-        ret: Option<String>,
-        locals: Vec<(String, String)>,
+        params: Vec<(String, Type)>,
+        ret: Type,
+        locals: Vec<(String, Type)>,
         body: Vec<Statement>,
     },
 }

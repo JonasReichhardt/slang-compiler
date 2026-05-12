@@ -23,14 +23,13 @@ mod semantic_tests {
 
         match semantic_res {
             Ok(sym) => {
-                println!("Incorrect symbol table {:?}", sym);
-                assert!(true);
+                println!("Incorrect symbol table {sym:?}");
             }
             Err(errors) => {
                 for err in &errors {
                     println!("{}", err.message);
                 }
-                assert!(false)
+                panic!()
             }
         }
     }
@@ -52,13 +51,12 @@ mod semantic_tests {
 
         match semantic_res {
             Ok(_) => {
-                assert!(false);
+                panic!()
             }
             Err(errors) => {
                 for err in &errors {
                     println!("{}", err.message);
                 }
-                assert!(true)
             }
         }
     }

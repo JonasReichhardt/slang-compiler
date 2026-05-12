@@ -1,3 +1,4 @@
+pub use crate::structs::*;
 use std::collections::HashMap;
 
 type Scope = HashMap<String, Symbol>;
@@ -5,11 +6,11 @@ type Scope = HashMap<String, Symbol>;
 #[derive(Debug, Clone)]
 pub enum Symbol {
     Var {
-        typ: String,
+        typ: Type,
     },
     Fn {
-        params: Vec<(String, String)>,
-        ret: Option<String>,
+        params: Vec<(String, Type)>,
+        ret: Type,
     },
 }
 
@@ -39,32 +40,38 @@ fn create_global_scope() -> Scope {
     glob_scope.insert(
         "put".to_string(),
         Symbol::Fn {
-            params: vec![("e".to_string(), "char".to_string())],
-            ret: None,
+            params: vec![("e".to_string(), Type::Char)],
+            ret: Type::Void,
         },
     );
     glob_scope.insert(
         "putLn".to_string(),
         Symbol::Fn {
             params: Vec::new(),
-            ret: None,
+            ret: Type::Void,
         },
     );
     glob_scope.insert(
         "ORD".to_string(),
         Symbol::Fn {
-            params: vec![("ch".to_string(), "char".to_string())],
-            ret: Some("int".to_string()),
+            params: vec![("ch".to_string(), Type::Char)],
+            ret: Type::Int,
         },
     );
     glob_scope.insert(
         "CHR".to_string(),
         Symbol::Fn {
-            params: vec![("i".to_string(), "int".to_string())],
-            ret: Some("char".to_string()),
+            params: vec![("i".to_string(), Type::Int)],
+            ret: Type::Char,
         },
     );
-    return glob_scope;
+    glob_scope
+}
+
+impl Default for SymbolTable {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SymbolTable {
@@ -83,7 +90,7 @@ impl SymbolTable {
         for symbol in self.scopes.last().unwrap() {
             print!("[{}|{}],", symbol.0, symbol.1);
         }
-        println!("");
+        println!();
         self.scopes.pop();
     }
 
