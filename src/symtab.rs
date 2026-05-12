@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 type Scope = HashMap<String, Symbol>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Symbol {
     Var {
         typ: Type,
