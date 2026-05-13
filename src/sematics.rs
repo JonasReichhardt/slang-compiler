@@ -8,6 +8,7 @@ pub struct SemanticError {
 pub struct SemanticAnalyzer {
     symbols: SymbolTable,
     errors: Vec<SemanticError>,
+    warnings: Vec<String>,
 }
 
 impl Default for SemanticAnalyzer {
@@ -21,6 +22,7 @@ impl SemanticAnalyzer {
         Self {
             symbols: SymbolTable::new(),
             errors: Vec::new(),
+            warnings: Vec::new(),
         }
     }
 
@@ -28,19 +30,32 @@ impl SemanticAnalyzer {
         self.errors.push(SemanticError { message: msg });
     }
 
-    pub fn analyze_program(
-        &mut self,
-        decls: &[Declaration],
-    ) -> Result<SymbolTable, Vec<SemanticError>> {
+    pub fn print_errors(&mut self) {
+        for err in &self.errors {
+            println!("{}", err.message);
+        }
+        println!(
+            "slang: Compilation failed with {} errors.",
+            self.errors.len()
+        );
+    }
+
+    pub fn pring_warnings(&mut self) {
+        for warn in &self.warnings {
+            println!("{}", warn);
+        }
+        println!(
+            "slang: Compilation succedded with {} warnings.",
+            self.warnings.len()
+        );
+    }
+
+    pub fn analyze_program(&mut self, decls: &[Declaration]) -> bool {
         for decl in decls {
             self.analyze_declaration(decl);
         }
 
-        if self.errors.is_empty() {
-            Ok(self.symbols.clone())
-        } else {
-            Err(self.errors.clone())
-        }
+        if self.errors.is_empty() { true } else { false }
     }
 
     fn analyze_declaration(&mut self, decl: &Declaration) {
@@ -202,12 +217,12 @@ impl SemanticAnalyzer {
     fn analyze_stat_seq(&mut self, stmts: &Vec<Statement>) -> Option<Type> {
         for (idx, stmt) in stmts.iter().enumerate() {
             if let Some(return_val) = self.analyze_statement(stmt) {
+                // if return statement is not the last in the sequence emit warning
                 if idx != stmts.len() - 1 {
-                    self.error(format!("Dead CODE bruada"));
-                    return Some(Type::Error);
-                } else {
-                    return Some(return_val);
+                    self.warnings
+                        .push(format!("Dead code found after {:?}", stmt));
                 }
+                return Some(return_val);
             }
         }
         None

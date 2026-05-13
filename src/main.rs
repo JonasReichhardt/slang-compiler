@@ -23,16 +23,10 @@ fn main() {
     let ast = parser.parse_program();
     if ast.is_ok() {
         let mut semantics = SemanticAnalyzer::new();
-        //dbg!(&ast);
         let res = semantics.analyze_program(&ast.unwrap());
-        match res {
-            Ok(_) => (),
-            Err(errors) => {
-                for err in &errors {
-                    println!("{}", err.message);
-                }
-                println!("slang: Compilation failed with {} errors.", errors.len());
-            }
+        semantics.pring_warnings();
+        if !res {
+            semantics.print_errors();
         }
     } else {
         let errors = ast.err().unwrap();

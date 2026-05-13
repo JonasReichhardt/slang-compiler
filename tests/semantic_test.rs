@@ -20,17 +20,9 @@ mod semantic_tests {
 
         let mut analyzer = SemanticAnalyzer::new();
         let semantic_res = analyzer.analyze_program(&parse_result.unwrap());
-
-        match semantic_res {
-            Ok(sym) => {
-                println!("Incorrect symbol table {sym:?}");
-            }
-            Err(errors) => {
-                for err in &errors {
-                    println!("{}", err.message);
-                }
-                panic!()
-            }
+        analyzer.pring_warnings();
+        if !semantic_res {
+            analyzer.print_errors();
         }
     }
 
@@ -45,19 +37,11 @@ mod semantic_tests {
             panic!()
         }
 
-        let ast = parse_result.unwrap();
         let mut analyzer = SemanticAnalyzer::new();
-        let semantic_res = analyzer.analyze_program(&ast);
-
-        match semantic_res {
-            Ok(_) => {
-                panic!()
-            }
-            Err(errors) => {
-                for err in &errors {
-                    println!("{}", err.message);
-                }
-            }
+        let semantic_res = analyzer.analyze_program(&parse_result.unwrap());
+        analyzer.pring_warnings();
+        if !semantic_res {
+            analyzer.print_errors();
         }
     }
 

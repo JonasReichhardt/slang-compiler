@@ -6,6 +6,8 @@ fn putInt(x: int): void { /* largest printable number = 9999 */
     var c2: char;
     var c3: char;
 
+    return;
+
     c3 = CHR(48 + x % 10); x = x / 10;
     c2 = CHR(48 + x % 10); x = x / 10;
     c1 = CHR(48 + x % 10); x = x / 10;
