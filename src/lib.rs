@@ -1,9 +1,11 @@
+pub mod codegen;
 pub mod parser;
 pub mod scanner;
 pub mod sematics;
 pub mod structs;
 pub mod symtab;
 
+pub use crate::codegen::*;
 pub use crate::parser::*;
 pub use crate::scanner::*;
 pub use crate::sematics::*;

@@ -42,7 +42,7 @@ impl SemanticAnalyzer {
 
     pub fn pring_warnings(&mut self) {
         for warn in &self.warnings {
-            println!("{}", warn);
+            println!("{warn}");
         }
         println!(
             "slang: Compilation succedded with {} warnings.",
@@ -51,11 +51,21 @@ impl SemanticAnalyzer {
     }
 
     pub fn analyze_program(&mut self, decls: &[Declaration]) -> bool {
+        let mut found_main = false;
         for decl in decls {
             self.analyze_declaration(decl);
+            if let Declaration::Fn { name, ret, .. } = decl {
+                if name == "main" && matches!(ret, Type::Int) {
+                    found_main = true;
+                }
+            }
         }
 
-        if self.errors.is_empty() { true } else { false }
+        if !found_main {
+            self.error("No main method found".to_string());
+        }
+
+        self.errors.is_empty()
     }
 
     fn analyze_declaration(&mut self, decl: &Declaration) {
@@ -110,7 +120,7 @@ impl SemanticAnalyzer {
                 // analyze body
                 match self.analyze_stat_seq(body) {
                     Some(ret_type) => {
-                        if ret_type != Type::Error && ret_type != ret.to_owned() {
+                        if ret_type != Type::Error && ret_type != *ret {
                             self.error(format!(
                                 "Function {} needs to return {:?} not {:?}",
                                 name,
@@ -120,8 +130,8 @@ impl SemanticAnalyzer {
                         }
                     }
                     None => {
-                        if ret.to_owned() != Type::Void {
-                            self.error(format!("Function {} does not have a return value", name));
+                        if *ret != Type::Void {
+                            self.error(format!("Function {name} does not have a return value"));
                         }
                     }
                 }
@@ -172,7 +182,7 @@ impl SemanticAnalyzer {
             }
 
             Statement::Return(ret_val) => match ret_val {
-                Some(ret) => return Some(self.analyze_expr(ret)),
+                Some(ret) => Some(self.analyze_expr(ret)),
                 None => Some(Type::Void),
             },
 
@@ -205,7 +215,7 @@ impl SemanticAnalyzer {
             (Some(x), Some(y)) if x == y => Some(x),
 
             (Some(x), Some(y)) => {
-                self.error(format!("Mismatched return types: {:?} vs {:?}", x, y));
+                self.error(format!("Mismatched return types: {x:?} vs {y:?}"));
 
                 Some(Type::Error)
             }
@@ -214,13 +224,13 @@ impl SemanticAnalyzer {
 
     // Returns the type if a return statement is inside the sequence
     // else returns None
-    fn analyze_stat_seq(&mut self, stmts: &Vec<Statement>) -> Option<Type> {
+    fn analyze_stat_seq(&mut self, stmts: &[Statement]) -> Option<Type> {
         for (idx, stmt) in stmts.iter().enumerate() {
             if let Some(return_val) = self.analyze_statement(stmt) {
                 // if return statement is not the last in the sequence emit warning
                 if idx != stmts.len() - 1 {
                     self.warnings
-                        .push(format!("Dead code found after {:?}", stmt));
+                        .push(format!("Dead code found after {stmt:?}"));
                 }
                 return Some(return_val);
             }
@@ -239,7 +249,7 @@ impl SemanticAnalyzer {
         }
 
         if left != right {
-            self.error(format!("Cannot compare {:?} with {:?}", left, right));
+            self.error(format!("Cannot compare {left:?} with {right:?}"));
         }
     }
 
@@ -286,7 +296,7 @@ impl SemanticAnalyzer {
     fn analyze_func_call(&mut self, name: &str, args: &[Expr]) -> Type {
         let (params, ret) = match self.symbols.lookup(name) {
             Some(Symbol::Var { .. }) => {
-                self.error(format!("{} is not a function", name));
+                self.error(format!("{name} is not a function"));
 
                 return Type::Error;
             }
@@ -294,7 +304,7 @@ impl SemanticAnalyzer {
             Some(Symbol::Fn { params, ret }) => (params.clone(), *ret),
 
             None => {
-                self.error(format!("Undefined function {}", name));
+                self.error(format!("Undefined function {name}"));
 
                 return Type::Error;
             }
@@ -316,8 +326,7 @@ impl SemanticAnalyzer {
 
             if actual != *expected && actual != Type::Error {
                 self.error(format!(
-                    "Function {} expected argument type {:?}, got {:?}",
-                    name, expected, actual
+                    "Function {name} expected argument type {expected:?}, got {actual:?}"
                 ));
             }
         }

@@ -492,5 +492,17 @@ mod semantic_tests {
         );
     }
 
+    #[test]
+    fn error_no_main() {
+        analyze_err(
+            "
+                var x: int;
+                fn foo() {
+                    return;
+                }
+            ",
+        );
+    }
+
     // Semantic tests - END
 }
