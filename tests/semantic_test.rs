@@ -20,7 +20,7 @@ mod semantic_tests {
 
         let mut analyzer = SemanticAnalyzer::new();
         let semantic_res = analyzer.analyze_program(&parse_result.unwrap());
-        analyzer.pring_warnings();
+        analyzer.print_warnings();
         if !semantic_res {
             analyzer.print_errors();
         }
@@ -39,7 +39,7 @@ mod semantic_tests {
 
         let mut analyzer = SemanticAnalyzer::new();
         let semantic_res = analyzer.analyze_program(&parse_result.unwrap());
-        analyzer.pring_warnings();
+        analyzer.print_warnings();
         if !semantic_res {
             analyzer.print_errors();
         }
