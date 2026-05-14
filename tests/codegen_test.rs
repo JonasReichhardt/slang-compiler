@@ -44,7 +44,7 @@ mod codegen_tests {
 
         let mut cg = Codegen::new();
 
-        let asm = cg.generate(&ast);
+        let asm = cg.generate_asm(&ast);
 
         let base = unique_name("test");
 
