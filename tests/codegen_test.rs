@@ -32,7 +32,7 @@ mod codegen_tests {
 
         let mut analyzer = SemanticAnalyzer::new();
         let semantic_res = analyzer.analyze_program(&ast);
-        analyzer.pring_warnings();
+        analyzer.print_warnings();
         if !semantic_res {
             analyzer.print_errors();
             panic!()

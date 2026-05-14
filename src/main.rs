@@ -26,7 +26,7 @@ fn main() {
     if ast.is_ok() {
         let mut semantics = SemanticAnalyzer::new();
         let res = semantics.analyze_program(&ast.unwrap());
-        semantics.pring_warnings();
+        semantics.print_warnings();
         if !res {
             semantics.print_errors();
         }

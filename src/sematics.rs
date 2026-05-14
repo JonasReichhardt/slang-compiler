@@ -40,7 +40,7 @@ impl SemanticAnalyzer {
         );
     }
 
-    pub fn pring_warnings(&mut self) {
+    pub fn print_warnings(&mut self) {
         for warn in &self.warnings {
             println!("{warn}");
         }
