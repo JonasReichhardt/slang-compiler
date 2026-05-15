@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Ident(String),
@@ -76,6 +78,22 @@ pub enum BinaryOp {
     Mul,
     Div,
     Mod,
+}
+
+impl fmt::Display for BinaryOp {
+    #[rustfmt::skip]
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+
+        let name = match self {
+            BinaryOp::Add => "add",BinaryOp::Sub=>"sub",BinaryOp::Div=>"div",
+            BinaryOp::Mul=>"mul",BinaryOp::Mod=>"rem",
+        };
+
+        write!(f, "{name}")
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -105,4 +105,15 @@ mod codegen_tests {
 
         assert_eq!(compile_and_run(code), 0);
     }
+
+    #[test]
+    fn test_return_expr() {
+        let code = "
+            fn main(): int {
+                return 5+10;
+            }
+        ";
+
+        assert_eq!(compile_and_run(code), 15);
+    }
 }

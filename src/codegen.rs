@@ -1,4 +1,4 @@
-use crate::{Declaration, Expr, Statement};
+use crate::{Declaration, Expr, Statement, UnaryOp};
 use std::fmt;
 
 #[rustfmt::skip]
@@ -17,7 +17,7 @@ impl fmt::Display for Register {
             Register::T6 => "t6",
         };
 
-        write!(f, "{}", name)
+        write!(f, "{name}")
     }
 }
 
@@ -88,9 +88,9 @@ impl Codegen {
         match decl {
             Declaration::Fn {
                 name,
-                params,
-                ret,
-                locals,
+                params: _,
+                ret: _,
+                locals: _,
                 body,
             } => {
                 self.emit(format!("{name}:"));
@@ -109,6 +109,7 @@ impl Codegen {
                 if let Some(ex) = expr {
                     let reg = self.gen_expression(ex);
                     self.emit(format!("addi a0,{reg},0")); //move to a0
+                    self.regs.free(reg);
                 }
                 self.emit("ret");
             }
@@ -116,12 +117,35 @@ impl Codegen {
         }
     }
 
+    // returns the register the expr result is stored in
     fn gen_expression(&mut self, expr: &Expr) -> Register {
         match expr {
             Expr::Number(num) => {
                 let reg = self.regs.alloc();
                 self.emit(format!("li {reg},{num}"));
                 reg
+            }
+            Expr::Char(c) => {
+                let reg = self.regs.alloc();
+                self.emit(format!("li {reg},{}", *c as u32)); // this should be byte load and store later
+                reg
+            }
+            Expr::Binary { left, op, right } => {
+                let rd = self.regs.alloc();
+                let rs1 = self.gen_expression(left);
+                let rs2 = self.gen_expression(right);
+                self.emit(format!("{op} {rd},{rs1},{rs2}"));
+                rd
+            }
+            Expr::Unary { op, expr } => {
+                let rd = self.regs.alloc();
+                let rs1 = self.gen_expression(expr);
+                let imm = match op {
+                    UnaryOp::Plus => 1,
+                    UnaryOp::Minus => -1,
+                };
+                self.emit(format!("addi {rd},{rs1},{imm}"));
+                rd
             }
             _ => todo!(),
         }
