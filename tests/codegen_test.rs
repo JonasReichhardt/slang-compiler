@@ -116,4 +116,18 @@ mod codegen_tests {
 
         assert_eq!(compile_and_run(code), 15);
     }
+
+    #[test]
+    fn test_return_glob_var() {
+        let code = "
+            var x: int;
+
+            fn main(): int {
+                x = 42;
+                return x;
+            }
+        ";
+
+        assert_eq!(compile_and_run(code), 42);
+    }
 }

@@ -47,7 +47,8 @@ impl RegisterAllocator {
 
 // emit RISC-V assembler instructions
 pub struct Codegen {
-    pub code: Vec<String>,
+    code: Vec<String>,
+    glob_data: Vec<String>,
     regs: RegisterAllocator,
 }
 
@@ -68,17 +69,29 @@ impl Codegen {
                 format!("li a7,93"),
                 format!("ecall"),
             ],
+            glob_data: Vec::new(),
             regs: RegisterAllocator::new(),
         }
     }
+
+    fn emit_glob_var(&mut self, name: &str) {
+        // emit a .data segment
+        if self.glob_data.len() == 0 {
+            self.glob_data.push(format!(".data"));
+        }
+        self.glob_data.push(format!("{name}: .quad 0"));
+    }
+
     fn emit(&mut self, text: impl Into<String>) {
         self.code.push(text.into());
     }
+
     pub fn generate_asm(&mut self, ast: &[Declaration]) -> String {
         for decl in ast {
             self.gen_decl(decl);
         }
-        let asm = self.code.join("\n");
+        self.glob_data.append(&mut self.code);
+        let asm = self.glob_data.join("\n");
         println!("ASM:");
         println!("{asm}");
         asm
@@ -99,7 +112,9 @@ impl Codegen {
                     self.gen_statement(stmt);
                 }
             }
-            _ => todo!(),
+            Declaration::Var(name, ..) => {
+                self.emit_glob_var(name);
+            }
         }
     }
 
@@ -112,6 +127,15 @@ impl Codegen {
                     self.regs.free(reg);
                 }
                 self.emit("ret");
+            }
+            Statement::Assign(name, expr) => {
+                let addr = self.regs.alloc();
+                let val = self.gen_expression(expr);
+                self.emit(format!("la {addr},{name}")); //load addr of glob var
+                self.emit(format!("sd {val},0({addr})")); //store value into glob var
+
+                self.regs.free(val);
+                self.regs.free(addr);
             }
             _ => todo!(),
         }
@@ -146,6 +170,14 @@ impl Codegen {
                 };
                 self.emit(format!("addi {rd},{rs1},{imm}"));
                 rd
+            }
+            Expr::Ident(name) => {
+                let addr = self.regs.alloc();
+                let val = self.regs.alloc();
+                self.emit(format!("la {addr},{name}")); //load addr of glob var
+                self.emit(format!("ld {val},0({addr})"));
+                self.regs.free(addr);
+                val
             }
             _ => todo!(),
         }
