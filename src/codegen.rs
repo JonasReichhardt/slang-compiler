@@ -23,6 +23,7 @@ impl fmt::Display for Register {
 
 struct RegisterAllocator {
     free: Vec<Register>,
+    args: Vec<String>,
 }
 
 impl RegisterAllocator {
@@ -33,17 +34,18 @@ impl RegisterAllocator {
                 Register::T0,Register::T1,Register::T2,
                 Register::T3,Register::T4,Register::T5,Register::T6,
             ],
+            args: vec![format!("a0"),format!("a1"),format!("a2"),format!("a3"),
+                format!("a4"),format!("a5"),format!("a6"),format!("a7")
+            ]
         }
     }
 
     pub fn alloc(&mut self) -> Register {
         let reg = self.free.pop().expect("RegisterAllocator out of regs");
-        println!("pop{reg}");
         reg
     }
 
     pub fn free(&mut self, reg: Register) {
-        println!("push{reg}");
         self.free.push(reg);
     }
 }
@@ -52,6 +54,7 @@ impl RegisterAllocator {
 pub struct Codegen {
     code: Vec<String>,
     glob_data: Vec<String>,
+    builtin_func: Vec<String>,
     regs: RegisterAllocator,
 }
 
@@ -60,13 +63,20 @@ impl Codegen {
         Self {
             code: vec![
                 format!(".global _start"),
+                format!(".section .bss"),
+                format!("put_buf: .space 1"),
                 format!(".text"),
                 format!("_start:"),
+                format!("addi sp,sp,-16"),
+                format!("sd ra,8(sp)"),
                 format!("call main"),
+                format!("ld ra,8(sp)"),
+                format!("addi sp,sp,16"),
                 format!("li a7,93"),
                 format!("ecall"),
             ],
             glob_data: Vec::new(),
+            builtin_func: builtin_funcs(),
             regs: RegisterAllocator::new(),
         }
     }
@@ -124,6 +134,7 @@ impl Codegen {
             self.gen_decl(decl);
         }
         self.glob_data.append(&mut self.code);
+        self.glob_data.append(&mut self.builtin_func);
         let asm = self.glob_data.join("\n");
         println!("ASM:");
         println!("{asm}");
@@ -182,6 +193,19 @@ impl Codegen {
                     unreachable!()
                 }
             }
+            Statement::Call(name, args) => {
+                if args.len() > self.regs.args.len() {
+                    unreachable!()
+                }
+                for (idx, arg) in args.iter().enumerate() {
+                    let reg = self.gen_expression(arg);
+                    //move from temp reg into arg reg
+                    self.emit(format!("addi {},{reg},0", self.regs.args[idx]));
+                    self.regs.free(reg);
+                }
+
+                self.emit(format!("call {name}"));
+            }
             _ => todo!(),
         }
     }
@@ -235,4 +259,31 @@ fn get_stack_frame(num_vars: usize) -> i32 {
     }
     let frame_size: i32 = (1 + num_vars as i32) * 8; // reserve one extra space for return addr
     ((frame_size + 15) / 16) * 16
+}
+
+fn builtin_funcs() -> Vec<String> {
+    let ret = vec![
+        format!("put:"),
+        format!("addi sp,sp,-16"),
+        format!("sd ra,8(sp)"),
+        format!("la t0, put_buf"),
+        format!("sb a0, 0(t0)"),
+        format!("li a0, 1"),
+        format!("la a1, put_buf"),
+        format!("li a2, 1"),
+        format!("li a7, 64"),
+        format!("ecall"),
+        format!("ld ra,8(sp)"),
+        format!("addi sp,sp,16"),
+        format!("ret"),
+        format!("putLn:"),
+        format!("addi sp, sp, -16"),
+        format!("sd ra, 8(sp)"),
+        format!("li a0,10"),
+        format!("call put"),
+        format!("ld ra, 8(sp)"),
+        format!("addi sp, sp, 16"),
+        format!("ret"),
+    ];
+    ret
 }

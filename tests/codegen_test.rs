@@ -45,6 +45,10 @@ mod codegen_tests {
         let mut cg = Codegen::new();
         let asm = cg.generate_asm(&ast);
 
+        link_run(asm)
+    }
+
+    fn link_run(asm: String) -> i32 {
         let base = unique_name("test");
         let asm_file = format!("/tmp/{base}.s");
         let exe_file = format!("/tmp/{base}");
@@ -79,7 +83,43 @@ mod codegen_tests {
             .output()
             .expect("failed to execute qemu");
 
+        dbg!(run.stderr);
+        dbg!(run.stdout);
         run.status.code().unwrap_or(-1)
+    }
+
+    #[test]
+    fn test_setup() {
+        let code = format!(
+            ".global _start
+
+        .section .bss
+        put_buffer:
+            .space 1
+
+        .section .text
+
+        _start:
+            li a0, 65
+            call put
+
+            li a7, 93
+            li a0, 0
+            ecall
+
+        put:
+            la t0, put_buffer
+            sb a0, 0(t0)
+
+            li a0, 1
+            la a1, put_buffer
+            li a2, 1
+            li a7, 64
+            ecall
+
+            ret"
+        );
+        assert_eq!(link_run(code), 0);
     }
 
     #[test]
@@ -266,5 +306,16 @@ mod codegen_tests {
             }
         ";
         assert_eq!(compile_and_run(code), 36);
+    }
+
+    #[test]
+    fn test_put() {
+        let code = "
+            fn main(): int {
+                put('A');
+                return 0;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 0);
     }
 }

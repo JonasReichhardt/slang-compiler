@@ -28,6 +28,7 @@ impl std::fmt::Display for Symbol {
 #[derive(Debug, Clone)]
 pub struct SymbolTable {
     scopes: Vec<Scope>,
+    builtin: Scope,
 }
 
 // creates symbols for the builtin functions
@@ -77,8 +78,10 @@ impl Default for SymbolTable {
 
 impl SymbolTable {
     pub fn new() -> Self {
+        let builtin = create_global_scope();
         Self {
-            scopes: vec![create_global_scope()],
+            scopes: vec![builtin.clone()],
+            builtin,
         }
     }
 
@@ -112,6 +115,10 @@ impl SymbolTable {
             }
         }
         None
+    }
+
+    pub fn is_builtin(&self, name: &str) -> bool {
+        self.builtin.contains_key(name)
     }
 
     // checks if a variable is in the global scope
