@@ -257,4 +257,14 @@ mod codegen_tests {
         ";
         assert_eq!(compile_and_run(code), 4);
     }
+
+    #[test]
+    fn test_large_expr() {
+        let code = "
+            fn main(): int {
+              return 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 36);
+    }
 }

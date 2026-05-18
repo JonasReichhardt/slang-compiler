@@ -37,10 +37,13 @@ impl RegisterAllocator {
     }
 
     pub fn alloc(&mut self) -> Register {
-        self.free.pop().expect("RegisterAllocator out of regs")
+        let reg = self.free.pop().expect("RegisterAllocator out of regs");
+        println!("pop{reg}");
+        reg
     }
 
     pub fn free(&mut self, reg: Register) {
+        println!("push{reg}");
         self.free.push(reg);
     }
 }
@@ -197,27 +200,24 @@ impl Codegen {
                 reg
             }
             Expr::Binary { left, op, right } => {
-                let rd = self.regs.alloc();
                 let rs1 = self.gen_expression(left);
                 let rs2 = self.gen_expression(right);
-                self.emit(format!("{op} {rd},{rs1},{rs2}"));
-                rd
+                self.emit(format!("{op} {rs1},{rs1},{rs2}"));
+                self.regs.free(rs2);
+                rs1
             }
             Expr::Unary { op, expr } => {
-                let rd = self.regs.alloc();
                 let rs1 = self.gen_expression(expr);
                 let imm = match op {
                     UnaryOp::Plus => 1,
                     UnaryOp::Minus => -1,
                 };
-                self.emit(format!("addi {rd},{rs1},{imm}"));
-                rd
+                self.emit(format!("addi {rs1},{rs1},{imm}"));
+                rs1
             }
-            Expr::Ident { name, loc } => {
+            Expr::Ident { name: _, loc } => {
                 if let Some(var_loc) = loc {
-                    self.emit(format!("# Load variable {name}"));
                     let rd = self.load(var_loc);
-                    self.emit(format!("# into {rd}"));
                     rd
                 } else {
                     unreachable!()
