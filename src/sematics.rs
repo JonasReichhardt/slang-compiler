@@ -128,7 +128,7 @@ impl SemanticAnalyzer {
                         decl.name.clone(),
                         Symbol::Var {
                             typ: decl.typ,
-                            loc: VarLocation::Stack(-((idx as i32 + 1) * var_size)),
+                            loc: VarLocation::Stack((idx as i32 + 1) * var_size),
                         },
                     ) {
                         self.error(format!("Redefined local variable {}", decl.name));

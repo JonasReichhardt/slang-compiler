@@ -52,12 +52,6 @@ pub struct Codegen {
     regs: RegisterAllocator,
 }
 
-impl Default for Codegen {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Codegen {
     pub fn new() -> Self {
         Self {
@@ -87,7 +81,7 @@ impl Codegen {
     fn store(&mut self, reg: Register, loc: &VarLocation) {
         match loc {
             VarLocation::Stack(offset) => {
-                self.emit(format!("sd {reg}, {offset}(fp)"));
+                self.emit(format!("sd {reg}, {offset}(sp)"));
             }
 
             VarLocation::Global(label) => {
@@ -105,7 +99,7 @@ impl Codegen {
         let reg = self.regs.alloc();
         match loc {
             VarLocation::Stack(offset) => {
-                self.emit(format!("ld {reg}, {offset}(fp)"));
+                self.emit(format!("ld {reg}, {offset}(sp)"));
             }
 
             VarLocation::Global(label) => {
@@ -134,15 +128,14 @@ impl Codegen {
     }
 
     fn gen_func_prologue(&mut self, func: &FuncDecl) {
-        let stack_frame_size: i32 = func.locals.len() as i32 * 8;
+        let stack_frame_size: i32 = get_stack_frame(func.locals.len() as i32 * 8);
         self.emit(format!("addi sp,sp,{}", -stack_frame_size));
-        self.emit(format!("sd fp,8(sp)")); // preserve fp
-        self.emit(format!("addi fp,sp,{}", stack_frame_size));
+        self.emit(format!("sd ra,0(sp)")); // preserve ra
     }
 
     fn gen_func_epilogue(&mut self, func: &FuncDecl) {
-        let stack_frame_size: i32 = func.locals.len() as i32 * 8;
-        self.emit(format!("ld fp,8(sp)")); // restore fp
+        let stack_frame_size: i32 = get_stack_frame(func.locals.len() as i32 * 8);
+        self.emit(format!("ld ra,0(sp)")); // restore ra
         self.emit(format!("addi sp,sp,{}", stack_frame_size));
         self.emit("ret");
     }
@@ -233,4 +226,13 @@ impl Codegen {
             _ => todo!(),
         }
     }
+}
+
+// calculates the stack frame size needed for the given number of bytes
+fn get_stack_frame(num_bytes: i32) -> i32 {
+    if num_bytes == 0 {
+        return 16;
+    }
+    let frame_size = num_bytes + 8; // reserve one extra space for return addr
+    ((frame_size + 15) / 16) * 16
 }

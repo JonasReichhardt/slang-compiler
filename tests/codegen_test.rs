@@ -43,11 +43,9 @@ mod codegen_tests {
         // ---------------------------------------------
 
         let mut cg = Codegen::new();
-
         let asm = cg.generate_asm(&ast);
 
         let base = unique_name("test");
-
         let asm_file = format!("/tmp/{base}.s");
         let exe_file = format!("/tmp/{base}");
 
@@ -148,5 +146,35 @@ mod codegen_tests {
             }
         ";
         assert_eq!(compile_and_run(code), 0);
+    }
+
+    #[test]
+    fn test_local_vars() {
+        let code = "
+            fn main(): int {
+                var y0: int;
+                var y1: int;
+                var y2: int;
+                var y3: int;
+                var y4: int;
+                var y5: int;
+                var y6: int;
+                var y7: int;
+                var y8: int;
+                var y9: int;
+                y0=1;
+                y1=2;
+                y2=3;
+                y3=4;
+                y4=5;
+                y5=6;
+                y6=7;
+                y7=8;
+                y8=9;
+                y9=10;
+                return y0+y1;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 5);
     }
 }
