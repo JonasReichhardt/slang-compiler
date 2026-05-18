@@ -336,5 +336,16 @@ mod parser_tests {
         );
     }
 
+    #[test]
+    fn test_unary_op() {
+        parse_ok(
+            "
+                fn main():int{
+                    return -5;
+                }
+            ",
+        );
+    }
+
     // Parse tests - END
 }

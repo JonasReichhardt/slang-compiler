@@ -252,7 +252,7 @@ mod codegen_tests {
     fn test_unary() {
         let code = "
             fn main(): int {
-                return 5-;
+                return -5;
             }
         ";
         assert_eq!(compile_and_run(code), 4);

@@ -324,6 +324,18 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expression(&mut self) -> Option<Expr> {
+        if matches!(self.current.token, Token::Plus | Token::Minus) {
+            let op = match self.current.token {
+                Token::Plus => UnaryOp::Plus,
+                Token::Minus => UnaryOp::Minus,
+                _ => unreachable!(),
+            };
+            self.advance();
+            return Some(Expr::Unary {
+                op,
+                expr: Box::new(self.parse_term()?),
+            });
+        }
         let mut expr = self.parse_term()?;
 
         while matches!(self.current.token, Token::Plus | Token::Minus) {
