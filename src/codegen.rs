@@ -86,8 +86,8 @@ impl Codegen {
 
             VarLocation::Global(label) => {
                 let addr = self.regs.alloc();
-                self.emit(format!("la {addr}, {label}"));
-                self.emit(format!("sd {reg}, 0({addr})"));
+                self.emit(format!("la {addr},{label}"));
+                self.emit(format!("sd {reg},0({addr})"));
                 self.regs.free(addr);
             }
         }
@@ -99,13 +99,13 @@ impl Codegen {
         let reg = self.regs.alloc();
         match loc {
             VarLocation::Stack(offset) => {
-                self.emit(format!("ld {reg}, {offset}(sp)"));
+                self.emit(format!("ld {reg},{offset}(sp)"));
             }
 
             VarLocation::Global(label) => {
                 let addr = self.regs.alloc();
-                self.emit(format!("la {addr}, {label}"));
-                self.emit(format!("ld {reg}, 0({addr})"));
+                self.emit(format!("la {addr},{label}"));
+                self.emit(format!("ld {reg},0({addr})"));
                 self.regs.free(addr);
             }
         }
@@ -128,13 +128,13 @@ impl Codegen {
     }
 
     fn gen_func_prologue(&mut self, func: &FuncDecl) {
-        let stack_frame_size: i32 = get_stack_frame(func.locals.len() as i32 * 8);
+        let stack_frame_size: i32 = get_stack_frame(func.locals.len().try_into().unwrap());
         self.emit(format!("addi sp,sp,{}", -stack_frame_size));
         self.emit(format!("sd ra,0(sp)")); // preserve ra
     }
 
     fn gen_func_epilogue(&mut self, func: &FuncDecl) {
-        let stack_frame_size: i32 = get_stack_frame(func.locals.len() as i32 * 8);
+        let stack_frame_size: i32 = get_stack_frame(func.locals.len().try_into().unwrap());
         self.emit(format!("ld ra,0(sp)")); // restore ra
         self.emit(format!("addi sp,sp,{}", stack_frame_size));
         self.emit("ret");
@@ -229,10 +229,10 @@ impl Codegen {
 }
 
 // calculates the stack frame size needed for the given number of bytes
-fn get_stack_frame(num_bytes: i32) -> i32 {
-    if num_bytes == 0 {
+fn get_stack_frame(num_vars: usize) -> i32 {
+    if num_vars == 0 {
         return 16;
     }
-    let frame_size = num_bytes + 8; // reserve one extra space for return addr
+    let frame_size: i32 = (1 + num_vars as i32) * 8; // reserve one extra space for return addr
     ((frame_size + 15) / 16) * 16
 }

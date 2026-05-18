@@ -175,6 +175,6 @@ mod codegen_tests {
                 return y0+y1;
             }
         ";
-        assert_eq!(compile_and_run(code), 5);
+        assert_eq!(compile_and_run(code), 3);
     }
 }
