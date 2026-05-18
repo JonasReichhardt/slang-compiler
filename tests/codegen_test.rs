@@ -177,4 +177,84 @@ mod codegen_tests {
         ";
         assert_eq!(compile_and_run(code), 3);
     }
+
+    #[test]
+    fn test_addition() {
+        let code = "
+            fn main(): int {
+                return 5+10;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 15);
+    }
+
+    #[test]
+    fn test_minus() {
+        let code = "
+            fn main(): int {
+                return 10-5;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 5);
+    }
+
+    #[test]
+    fn test_mul() {
+        let code = "
+            fn main(): int {
+                return 5*10;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 50);
+    }
+
+    #[test]
+    fn test_div() {
+        let code = "
+            fn main(): int {
+                return 50/10;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 5);
+    }
+
+    #[test]
+    fn test_mod() {
+        let code = "
+            fn main(): int {
+                return 50%10;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 0);
+    }
+
+    #[test]
+    fn test_operater_precedence() {
+        let code = "
+            fn main(): int {
+                return 1+10*5;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 51);
+    }
+
+    #[test]
+    fn test_parentheses() {
+        let code = "
+            fn main(): int {
+                return (1+10)*5;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 55);
+    }
+
+    #[test]
+    fn test_unary() {
+        let code = "
+            fn main(): int {
+                return 5-;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 4);
+    }
 }
