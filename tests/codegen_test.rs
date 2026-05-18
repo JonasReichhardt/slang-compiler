@@ -28,10 +28,10 @@ mod codegen_tests {
             }
             panic!()
         }
-        let ast = parse_result.unwrap();
+        let mut ast = parse_result.unwrap();
 
         let mut analyzer = SemanticAnalyzer::new();
-        let semantic_res = analyzer.analyze_program(&ast);
+        let semantic_res = analyzer.analyze_program(&mut ast);
         analyzer.print_warnings();
         if !semantic_res {
             analyzer.print_errors();
@@ -91,7 +91,6 @@ mod codegen_tests {
                 return 42;
             }
         ";
-
         assert_eq!(compile_and_run(code), 42);
     }
 
@@ -102,7 +101,6 @@ mod codegen_tests {
                 return 0;
             }
         ";
-
         assert_eq!(compile_and_run(code), 0);
     }
 
@@ -113,7 +111,6 @@ mod codegen_tests {
                 return 5+10;
             }
         ";
-
         assert_eq!(compile_and_run(code), 15);
     }
 
@@ -127,7 +124,29 @@ mod codegen_tests {
                 return x;
             }
         ";
-
         assert_eq!(compile_and_run(code), 42);
+    }
+
+    #[test]
+    fn test_return_local_var() {
+        let code = "
+            fn main(): int {
+                var x: int;
+                x = 42;
+                return x;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 42);
+    }
+
+    #[test]
+    fn test_return_unused_var() {
+        let code = "
+            fn main(): int {
+                var y: int;
+                return y;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 0);
     }
 }

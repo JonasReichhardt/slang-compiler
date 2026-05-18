@@ -25,7 +25,7 @@ fn main() {
     let ast = parser.parse_program();
     if ast.is_ok() {
         let mut semantics = SemanticAnalyzer::new();
-        let res = semantics.analyze_program(&ast.unwrap());
+        let res = semantics.analyze_program(&mut ast.unwrap());
         semantics.print_warnings();
         if !res {
             semantics.print_errors();

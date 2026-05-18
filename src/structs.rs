@@ -51,9 +51,11 @@ pub struct SpannedToken {
 pub enum Expr {
     Number(i64),
     Char(char),
-    Ident(String),
     Call(String, Vec<Expr>),
-
+    Ident {
+        name: String,
+        loc: Option<VarLocation>,
+    },
     Unary {
         op: UnaryOp,
         expr: Box<Expr>,
@@ -127,8 +129,12 @@ impl From<String> for Type {
 
 #[derive(Debug)]
 pub enum Statement {
-    Assign(String, Expr),
     Call(String, Vec<Expr>),
+    Assign {
+        name: String,
+        loc: Option<VarLocation>,
+        expr: Expr,
+    },
     If {
         branches: Vec<(Condition, Vec<Statement>)>,
         else_branch: Option<Vec<Statement>>,
@@ -140,16 +146,32 @@ pub enum Statement {
     Return(Option<Expr>),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum VarLocation {
+    Stack(i32),
+    Global(String),
+}
+
 #[derive(Debug)]
 pub enum Declaration {
-    Var(String, Type),
-    Fn {
-        name: String,
-        params: Vec<(String, Type)>,
-        ret: Type,
-        locals: Vec<(String, Type)>,
-        body: Vec<Statement>,
-    },
+    Var(VarDecl),
+    Fn(FuncDecl),
+}
+
+#[derive(Debug)]
+pub struct VarDecl {
+    pub name: String,
+    pub typ: Type,
+    pub loc: Option<VarLocation>,
+}
+
+#[derive(Debug)]
+pub struct FuncDecl {
+    pub name: String,
+    pub params: Vec<(String, Type)>,
+    pub ret: Type,
+    pub locals: Vec<VarDecl>,
+    pub body: Vec<Statement>,
 }
 
 #[derive(Debug, Clone)]

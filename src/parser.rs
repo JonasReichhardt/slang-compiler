@@ -120,7 +120,11 @@ impl<'a> Parser<'a> {
                 self.expect(Token::Colon);
                 let ty = self.expect_ident();
                 self.expect(Token::Semicolon);
-                Some(Declaration::Var(name, ty.into()))
+                Some(Declaration::Var(VarDecl {
+                    name,
+                    typ: ty.into(),
+                    loc: None,
+                }))
             }
 
             Token::Fn => {
@@ -130,10 +134,15 @@ impl<'a> Parser<'a> {
 
                 self.expect(Token::LBrace);
 
-                let mut locals = Vec::new();
+                let mut locals: Vec<VarDecl> = Vec::new();
                 while self.current.token == Token::Var {
-                    if let Some(Declaration::Var(n, t)) = self.parse_declaration() {
-                        locals.push((n, t));
+                    if let Some(local_var) = self.parse_declaration() {
+                        match local_var {
+                            Declaration::Var(var) => locals.push(var),
+                            Declaration::Fn(_) => {
+                                self.error("Local functions are not allowed".to_string())
+                            }
+                        }
                     } else {
                         self.synchronize_declaration();
                     }
@@ -142,13 +151,13 @@ impl<'a> Parser<'a> {
                 let body = self.parse_stat_seq();
                 self.expect(Token::RBrace);
 
-                Some(Declaration::Fn {
+                Some(Declaration::Fn(FuncDecl {
                     name,
                     params,
                     ret,
                     locals,
                     body,
-                })
+                }))
             }
 
             _ => {
@@ -210,7 +219,11 @@ impl<'a> Parser<'a> {
                     self.advance();
                     let expr = self.parse_expression()?;
                     self.expect(Token::Semicolon);
-                    Some(Statement::Assign(name, expr))
+                    Some(Statement::Assign {
+                        name,
+                        loc: None,
+                        expr,
+                    })
                 } else {
                     let args = self.parse_act_parameters()?;
                     self.expect(Token::Semicolon);
@@ -365,7 +378,7 @@ impl<'a> Parser<'a> {
                     let args = self.parse_act_parameters()?;
                     Some(Expr::Call(name, args))
                 } else {
-                    Some(Expr::Ident(name))
+                    Some(Expr::Ident { name, loc: None })
                 }
             }
 

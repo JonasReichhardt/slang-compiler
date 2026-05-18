@@ -9,9 +9,9 @@ mod semantic_tests {
 
     fn analyze_ok(input: &str) {
         let mut parser = Parser::new(Scanner::new(input));
-        let parse_result = parser.parse_program();
+        let ast = parser.parse_program();
 
-        if let Err(errors) = parse_result {
+        if let Err(errors) = ast {
             for err in &errors {
                 println!("{}:{}:{}", err.line, err.col, err.message);
             }
@@ -19,7 +19,7 @@ mod semantic_tests {
         }
 
         let mut analyzer = SemanticAnalyzer::new();
-        let semantic_res = analyzer.analyze_program(&parse_result.unwrap());
+        let semantic_res = analyzer.analyze_program(&mut ast.unwrap());
         analyzer.print_warnings();
         if !semantic_res {
             analyzer.print_errors();
@@ -28,9 +28,9 @@ mod semantic_tests {
 
     fn analyze_err(input: &str) {
         let mut parser = Parser::new(Scanner::new(input));
-        let parse_result = parser.parse_program();
+        let ast = parser.parse_program();
 
-        if let Err(errors) = parse_result {
+        if let Err(errors) = ast {
             for err in &errors {
                 println!("{}", err.message);
             }
@@ -38,7 +38,7 @@ mod semantic_tests {
         }
 
         let mut analyzer = SemanticAnalyzer::new();
-        let semantic_res = analyzer.analyze_program(&parse_result.unwrap());
+        let semantic_res = analyzer.analyze_program(&mut ast.unwrap());
         analyzer.print_warnings();
         if !semantic_res {
             analyzer.print_errors();

@@ -7,6 +7,7 @@ type Scope = HashMap<String, Symbol>;
 pub enum Symbol {
     Var {
         typ: Type,
+        loc: VarLocation,
     },
     Fn {
         params: Vec<(String, Type)>,
@@ -111,5 +112,14 @@ impl SymbolTable {
             }
         }
         None
+    }
+
+    // checks if a variable is in the global scope
+    pub fn is_global(&self, name: &str) -> bool {
+        let global_scope = self
+            .scopes
+            .first()
+            .expect("Could not retrieve global scope");
+        global_scope.get(name).is_some()
     }
 }

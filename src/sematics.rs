@@ -50,12 +50,12 @@ impl SemanticAnalyzer {
         );
     }
 
-    pub fn analyze_program(&mut self, decls: &[Declaration]) -> bool {
+    pub fn analyze_program(&mut self, decls: &mut [Declaration]) -> bool {
         let mut found_main = false;
         for decl in decls {
             self.analyze_declaration(decl);
-            if let Declaration::Fn { name, ret, .. } = decl {
-                if name == "main" && matches!(ret, Type::Int) {
+            if let Declaration::Fn(func_dec) = decl {
+                if func_dec.name == "main" && matches!(func_dec.ret, Type::Int) {
                     found_main = true;
                 }
             }
@@ -68,21 +68,32 @@ impl SemanticAnalyzer {
         self.errors.is_empty()
     }
 
-    fn analyze_declaration(&mut self, decl: &Declaration) {
+    fn analyze_declaration(&mut self, decl: &mut Declaration) {
         match decl {
-            Declaration::Var(name, ty) => {
-                if !self.symbols.insert(name.clone(), Symbol::Var { typ: *ty }) {
+            Declaration::Var(VarDecl { name, typ, loc }) => {
+                if !self.symbols.insert(
+                    name.clone(),
+                    Symbol::Var {
+                        typ: *typ,
+                        loc: VarLocation::Global(name.to_string()),
+                    },
+                ) {
                     self.error(format!("Duplicate variable {name}"));
+                }
+                // global variables location are set here.
+                // local variables location are set in Declaration::Fn
+                if self.symbols.is_global(name) {
+                    *loc = Some(VarLocation::Global(name.to_string()));
                 }
             }
 
-            Declaration::Fn {
+            Declaration::Fn(FuncDecl {
                 name,
                 params,
                 ret,
-                body,
                 locals,
-            } => {
+                body,
+            }) => {
                 // register function first (important for recursion)
                 if !self.symbols.insert(
                     name.clone(),
@@ -99,21 +110,28 @@ impl SemanticAnalyzer {
 
                 // parameters
                 for (pname, ptype) in params {
-                    if !self
-                        .symbols
-                        .insert(pname.clone(), Symbol::Var { typ: *ptype })
-                    {
-                        self.error(format!("Redefined parameter {name}"));
+                    if !self.symbols.insert(
+                        pname.clone(),
+                        Symbol::Var {
+                            typ: *ptype,
+                            loc: VarLocation::Stack(-8),
+                        },
+                    ) {
+                        self.error(format!("Redefined parameter {pname}"));
                     }
                 }
 
+                let var_size: i32 = 8;
                 // local variables
-                for (lname, ltype) in locals {
-                    if !self
-                        .symbols
-                        .insert(lname.clone(), Symbol::Var { typ: *ltype })
-                    {
-                        self.error(format!("Redefined local variable {name}"));
+                for (idx, decl) in locals.iter_mut().enumerate() {
+                    if !self.symbols.insert(
+                        decl.name.clone(),
+                        Symbol::Var {
+                            typ: decl.typ,
+                            loc: VarLocation::Stack(-((idx as i32 + 1) * var_size)),
+                        },
+                    ) {
+                        self.error(format!("Redefined local variable {}", decl.name));
                     }
                 }
 
@@ -141,11 +159,16 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn analyze_statement(&mut self, stmt: &Statement) -> Option<Type> {
+    fn analyze_statement(&mut self, stmt: &mut Statement) -> Option<Type> {
         match stmt {
-            Statement::Assign(name, expr) => match self.symbols.lookup(name) {
+            Statement::Assign {
+                name,
+                loc: var_loc,
+                expr,
+            } => match self.symbols.lookup(name) {
                 Some(sym) => match sym {
-                    Symbol::Var { typ } => {
+                    Symbol::Var { typ, loc } => {
+                        *var_loc = Some(loc.clone());
                         let ltype = *typ;
                         let rtype = self.analyze_expr(expr);
                         if ltype != Type::Error && rtype != Type::Error && ltype != rtype {
@@ -224,11 +247,12 @@ impl SemanticAnalyzer {
 
     // Returns the type if a return statement is inside the sequence
     // else returns None
-    fn analyze_stat_seq(&mut self, stmts: &[Statement]) -> Option<Type> {
-        for (idx, stmt) in stmts.iter().enumerate() {
+    fn analyze_stat_seq(&mut self, stmts: &mut [Statement]) -> Option<Type> {
+        let num_stmts = stmts.len();
+        for (idx, stmt) in stmts.iter_mut().enumerate() {
             if let Some(return_val) = self.analyze_statement(stmt) {
                 // if return statement is not the last in the sequence emit warning
-                if idx != stmts.len() - 1 {
+                if idx != num_stmts - 1 {
                     self.warnings
                         .push(format!("Dead code found after {stmt:?}"));
                 }
@@ -238,10 +262,10 @@ impl SemanticAnalyzer {
         None
     }
 
-    fn analyze_condition(&mut self, cond: &Condition) {
-        let left = self.analyze_expr(&cond.left);
+    fn analyze_condition(&mut self, cond: &mut Condition) {
+        let left = self.analyze_expr(&mut cond.left);
 
-        let right = self.analyze_expr(&cond.right);
+        let right = self.analyze_expr(&mut cond.right);
 
         // Prevent cascading errors
         if left == Type::Error || right == Type::Error {
@@ -253,15 +277,18 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn analyze_expr(&mut self, expr: &Expr) -> Type {
+    fn analyze_expr(&mut self, expr: &mut Expr) -> Type {
         match expr {
             Expr::Number(..) => Type::Int,
             Expr::Char(..) => Type::Char,
 
-            Expr::Ident(name) => {
+            Expr::Ident { name, loc } => {
                 if let Some(sym) = self.symbols.lookup(name) {
                     match sym {
-                        Symbol::Var { typ } => typ.to_owned(),
+                        Symbol::Var { typ, loc: sym_loc } => {
+                            *loc = Some(sym_loc.clone());
+                            typ.to_owned()
+                        }
                         Symbol::Fn { params: _, ret: _ } => Type::Error,
                     }
                 } else {
@@ -293,7 +320,7 @@ impl SemanticAnalyzer {
         }
     }
 
-    fn analyze_func_call(&mut self, name: &str, args: &[Expr]) -> Type {
+    fn analyze_func_call(&mut self, name: &str, args: &mut [Expr]) -> Type {
         let (params, ret) = match self.symbols.lookup(name) {
             Some(Symbol::Var { .. }) => {
                 self.error(format!("{name} is not a function"));
@@ -321,7 +348,7 @@ impl SemanticAnalyzer {
             return Type::Error;
         }
 
-        for (arg, (_, expected)) in args.iter().zip(params.iter()) {
+        for (arg, (_, expected)) in args.iter_mut().zip(params.iter()) {
             let actual = self.analyze_expr(arg);
 
             if actual != *expected && actual != Type::Error {

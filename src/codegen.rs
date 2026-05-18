@@ -1,4 +1,4 @@
-use crate::{Declaration, Expr, Statement, UnaryOp};
+use crate::{Declaration, Expr, FuncDecl, Statement, UnaryOp, VarLocation};
 use std::fmt;
 
 #[rustfmt::skip]
@@ -76,10 +76,46 @@ impl Codegen {
 
     fn emit_glob_var(&mut self, name: &str) {
         // emit a .data segment
-        if self.glob_data.len() == 0 {
-            self.glob_data.push(format!(".data"));
+        if self.glob_data.is_empty() {
+            self.glob_data.push(".data".to_string());
         }
         self.glob_data.push(format!("{name}: .quad 0"));
+    }
+
+    // stores the variable value inside the register into the given location
+    // frees the register aftwerwards
+    fn store(&mut self, reg: Register, loc: &VarLocation) {
+        match loc {
+            VarLocation::Stack(offset) => {
+                self.emit(format!("sd {reg}, {offset}(fp)"));
+            }
+
+            VarLocation::Global(label) => {
+                let addr = self.regs.alloc();
+                self.emit(format!("la {addr}, {label}"));
+                self.emit(format!("sd {reg}, 0({addr})"));
+                self.regs.free(addr);
+            }
+        }
+        self.regs.free(reg);
+    }
+
+    // loads the variable from the given location into a register
+    fn load(&mut self, loc: &VarLocation) -> Register {
+        let reg = self.regs.alloc();
+        match loc {
+            VarLocation::Stack(offset) => {
+                self.emit(format!("ld {reg}, {offset}(fp)"));
+            }
+
+            VarLocation::Global(label) => {
+                let addr = self.regs.alloc();
+                self.emit(format!("la {addr}, {label}"));
+                self.emit(format!("ld {reg}, 0({addr})"));
+                self.regs.free(addr);
+            }
+        }
+        reg
     }
 
     fn emit(&mut self, text: impl Into<String>) {
@@ -97,24 +133,39 @@ impl Codegen {
         asm
     }
 
+    fn gen_func_prologue(&mut self, func: &FuncDecl) {
+        let stack_frame_size: i32 = func.locals.len() as i32 * 8;
+        self.emit(format!("addi sp,sp,{}", -stack_frame_size));
+        self.emit(format!("sd fp,8(sp)")); // preserve fp
+        self.emit(format!("addi fp,sp,{}", stack_frame_size));
+    }
+
+    fn gen_func_epilogue(&mut self, func: &FuncDecl) {
+        let stack_frame_size: i32 = func.locals.len() as i32 * 8;
+        self.emit(format!("ld fp,8(sp)")); // restore fp
+        self.emit(format!("addi sp,sp,{}", stack_frame_size));
+        self.emit("ret");
+    }
+
     fn gen_decl(&mut self, decl: &Declaration) {
         match decl {
-            Declaration::Fn {
-                name,
-                params: _,
-                ret: _,
-                locals: _,
-                body,
-            } => {
-                self.emit(format!("{name}:"));
+            Declaration::Fn(func) => {
+                self.emit(format!("{}:", func.name));
 
-                for stmt in body {
+                self.gen_func_prologue(func);
+
+                for stmt in &func.body {
                     self.gen_statement(stmt);
                 }
+
+                self.gen_func_epilogue(func);
             }
-            Declaration::Var(name, ..) => {
-                self.emit_glob_var(name);
-            }
+            Declaration::Var(var) => match &var.loc {
+                Some(VarLocation::Global(label)) => self.emit_glob_var(label),
+                // init local variable with 0
+                Some(VarLocation::Stack(offset)) => self.emit(format!("sd zero, {offset}(fp)")),
+                None => unreachable!(),
+            },
         }
     }
 
@@ -126,16 +177,14 @@ impl Codegen {
                     self.emit(format!("addi a0,{reg},0")); //move to a0
                     self.regs.free(reg);
                 }
-                self.emit("ret");
             }
-            Statement::Assign(name, expr) => {
-                let addr = self.regs.alloc();
-                let val = self.gen_expression(expr);
-                self.emit(format!("la {addr},{name}")); //load addr of glob var
-                self.emit(format!("sd {val},0({addr})")); //store value into glob var
-
-                self.regs.free(val);
-                self.regs.free(addr);
+            Statement::Assign { name: _, loc, expr } => {
+                if let Some(var_loc) = loc {
+                    let val = self.gen_expression(expr);
+                    self.store(val, var_loc);
+                } else {
+                    unreachable!()
+                }
             }
             _ => todo!(),
         }
@@ -171,13 +220,15 @@ impl Codegen {
                 self.emit(format!("addi {rd},{rs1},{imm}"));
                 rd
             }
-            Expr::Ident(name) => {
-                let addr = self.regs.alloc();
-                let val = self.regs.alloc();
-                self.emit(format!("la {addr},{name}")); //load addr of glob var
-                self.emit(format!("ld {val},0({addr})"));
-                self.regs.free(addr);
-                val
+            Expr::Ident { name, loc } => {
+                if let Some(var_loc) = loc {
+                    self.emit(format!("# Load variable {name}"));
+                    let rd = self.load(var_loc);
+                    self.emit(format!("# into {rd}"));
+                    rd
+                } else {
+                    unreachable!()
+                }
             }
             _ => todo!(),
         }
