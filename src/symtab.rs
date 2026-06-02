@@ -5,14 +5,8 @@ type Scope = HashMap<String, Symbol>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Symbol {
-    Var {
-        typ: Type,
-        loc: VarLocation,
-    },
-    Fn {
-        params: Vec<(String, Type)>,
-        ret: Type,
-    },
+    Var { typ: Type, loc: VarLocation },
+    Fn { params: Vec<VarDecl>, ret: Type },
 }
 
 impl std::fmt::Display for Symbol {
@@ -42,7 +36,11 @@ fn create_global_scope() -> Scope {
     glob_scope.insert(
         "put".to_string(),
         Symbol::Fn {
-            params: vec![("e".to_string(), Type::Char)],
+            params: vec![VarDecl {
+                name: "e".to_string(),
+                typ: Type::Char,
+                loc: None,
+            }],
             ret: Type::Void,
         },
     );
@@ -56,14 +54,22 @@ fn create_global_scope() -> Scope {
     glob_scope.insert(
         "ORD".to_string(),
         Symbol::Fn {
-            params: vec![("ch".to_string(), Type::Char)],
+            params: vec![VarDecl {
+                name: "ch".to_string(),
+                typ: Type::Char,
+                loc: None,
+            }],
             ret: Type::Int,
         },
     );
     glob_scope.insert(
         "CHR".to_string(),
         Symbol::Fn {
-            params: vec![("i".to_string(), Type::Int)],
+            params: vec![VarDecl {
+                name: "i".to_string(),
+                typ: Type::Int,
+                loc: None,
+            }],
             ret: Type::Char,
         },
     );
@@ -90,11 +96,6 @@ impl SymbolTable {
     }
 
     pub fn exit_scope(&mut self) {
-        print!("Closing scope: ");
-        for symbol in self.scopes.last().unwrap() {
-            print!("[{}|{}],", symbol.0, symbol.1);
-        }
-        println!();
         self.scopes.pop();
     }
 

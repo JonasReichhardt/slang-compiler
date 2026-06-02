@@ -2,7 +2,7 @@ use crate::{Declaration, Expr, FuncDecl, Statement, UnaryOp, VarLocation};
 use std::fmt;
 
 #[rustfmt::skip]
-enum Register { T0,T1,T2,T3,T4,T5,T6,}
+enum Register { T0,T1,T2,T3,T4,T5,T6,A0,A1,A2,A3,A4,A5,A6,A7}
 
 impl fmt::Display for Register {
     #[rustfmt::skip]
@@ -14,29 +14,53 @@ impl fmt::Display for Register {
         let name = match self {
             Register::T0 => "t0",Register::T1 => "t1",Register::T2 => "t2",
             Register::T3 => "t3",Register::T4 => "t4",Register::T5 => "t5",
-            Register::T6 => "t6",
+            Register::T6 => "t6",Register::A0 => "a0",Register::A1 => "a1",
+            Register::A2 => "a2",Register::A3 => "a3",Register::A4 => "a4",
+            Register::A5 => "a5",Register::A6 => "a6",Register::A7 => "a7",
         };
 
         write!(f, "{name}")
     }
 }
 
+impl Register {
+    pub fn get_arg_reglist() -> Vec<Register> {
+        vec![
+            Register::A0,
+            Register::A1,
+            Register::A2,
+            Register::A3,
+            Register::A4,
+            Register::A5,
+            Register::A6,
+            Register::A7,
+        ]
+    }
+
+    pub fn get_temp_reglist() -> Vec<Register> {
+        vec![
+            Register::T0,
+            Register::T1,
+            Register::T2,
+            Register::T3,
+            Register::T4,
+            Register::T5,
+            Register::T6,
+        ]
+    }
+}
+
 struct RegisterAllocator {
     free: Vec<Register>,
-    args: Vec<String>,
+    args: Vec<Register>,
 }
 
 impl RegisterAllocator {
     #[rustfmt::skip]
     pub fn new() -> RegisterAllocator {
         Self {
-            free: vec![
-                Register::T0,Register::T1,Register::T2,
-                Register::T3,Register::T4,Register::T5,Register::T6,
-            ],
-            args: vec![format!("a0"),format!("a1"),format!("a2"),format!("a3"),
-                format!("a4"),format!("a5"),format!("a6"),format!("a7")
-            ]
+            free: Register::get_temp_reglist(),
+            args: Register::get_arg_reglist(),
         }
     }
 
@@ -47,6 +71,14 @@ impl RegisterAllocator {
 
     pub fn free(&mut self, reg: Register) {
         self.free.push(reg);
+    }
+
+    pub fn get_next_arg_reg(&mut self) -> Register {
+        self.args.pop().expect("UNIMPLEMENTED ARGUMENT SPILL")
+    }
+
+    pub fn reset_arg_regs(&mut self) {
+        self.args = Register::get_arg_reglist();
     }
 }
 
@@ -94,14 +126,12 @@ impl Codegen {
     fn store(&mut self, reg: Register, loc: &VarLocation) {
         match loc {
             VarLocation::Stack(offset) => {
-                self.emit(format!("sd {reg}, {offset}(sp)"));
+                self.emit(format!("sd {reg}, {}(sp)", offset));
             }
-
             VarLocation::Global(label) => {
                 let addr = self.regs.alloc();
                 self.emit(format!("la {addr},{label}"));
                 self.emit(format!("sd {reg},0({addr})"));
-                self.regs.free(addr);
             }
         }
         self.regs.free(reg);
@@ -112,14 +142,12 @@ impl Codegen {
         let reg = self.regs.alloc();
         match loc {
             VarLocation::Stack(offset) => {
-                self.emit(format!("ld {reg},{offset}(sp)"));
+                self.emit(format!("ld {reg},{}(sp)", offset));
             }
-
             VarLocation::Global(label) => {
                 let addr = self.regs.alloc();
                 self.emit(format!("la {addr},{label}"));
                 self.emit(format!("ld {reg},0({addr})"));
-                self.regs.free(addr);
             }
         }
         reg
@@ -142,13 +170,36 @@ impl Codegen {
     }
 
     fn gen_func_prologue(&mut self, func: &FuncDecl) {
-        let stack_frame_size: i32 = get_stack_frame(func.locals.len().try_into().unwrap());
-        self.emit(format!("addi sp,sp,{}", -stack_frame_size));
+        let var_num = func.locals.len() + func.params.len();
+        let stack_frame_size: i32 = get_stack_frame(var_num.try_into().unwrap());
+        self.emit(format!("addi sp,sp,-{}", stack_frame_size));
         self.emit(format!("sd ra,0(sp)")); // preserve ra
+
+        // spill function arguments onto stack
+        for param in &func.params {
+            let reg = self.regs.get_next_arg_reg();
+            match &param.loc {
+                Some(loc) => self.store(reg, loc),
+                None => unreachable!(),
+            };
+        }
+        self.regs.reset_arg_regs();
+
+        // create space for local variables
+        for local in &func.locals {
+            match &local.loc {
+                Some(loc) => match loc {
+                    VarLocation::Stack(offset) => self.emit(format!("sd zero,{}(sp)", offset)),
+                    VarLocation::Global(_) => unreachable!(),
+                },
+                None => unreachable!(),
+            };
+        }
     }
 
     fn gen_func_epilogue(&mut self, func: &FuncDecl) {
-        let stack_frame_size: i32 = get_stack_frame(func.locals.len().try_into().unwrap());
+        let var_num = func.locals.len() + func.params.len();
+        let stack_frame_size: i32 = get_stack_frame(var_num.try_into().unwrap());
         self.emit(format!("ld ra,0(sp)")); // restore ra
         self.emit(format!("addi sp,sp,{}", stack_frame_size));
         self.emit("ret");
@@ -161,16 +212,20 @@ impl Codegen {
 
                 self.gen_func_prologue(func);
 
+                self.emit("  ");
+
                 for stmt in &func.body {
                     self.gen_statement(stmt);
                 }
 
-                self.gen_func_epilogue(func);
+                self.emit("  ");
+
+                self.gen_func_epilogue(&func);
             }
             Declaration::Var(var) => match &var.loc {
-                Some(VarLocation::Global(label)) => self.emit_glob_var(label),
-                // init local variable with 0
-                Some(VarLocation::Stack(offset)) => self.emit(format!("sd zero, {offset}(fp)")),
+                Some(VarLocation::Global(_)) => self.emit_glob_var(&var.name),
+                // do nothing as everything regarding local var is done in the function declaration
+                Some(VarLocation::Stack(_)) => (),
                 None => unreachable!(),
             },
         }
@@ -194,17 +249,8 @@ impl Codegen {
                 }
             }
             Statement::Call(name, args) => {
-                if args.len() > self.regs.args.len() {
-                    unreachable!()
-                }
-                for (idx, arg) in args.iter().enumerate() {
-                    let reg = self.gen_expression(arg);
-                    //move from temp reg into arg reg
-                    self.emit(format!("addi {},{reg},0", self.regs.args[idx]));
-                    self.regs.free(reg);
-                }
-
-                self.emit(format!("call {name}"));
+                let reg = self.gen_call(name, args);
+                self.regs.free(reg); // throw away result
             }
             _ => todo!(),
         }
@@ -247,8 +293,24 @@ impl Codegen {
                     unreachable!()
                 }
             }
-            _ => todo!(),
+            Expr::Call(name, args) => self.gen_call(name, args),
         }
+    }
+
+    fn gen_call(&mut self, name: &str, args: &Vec<Expr>) -> Register {
+        // move args into a0-a7 TODO: spill onto stack if more args
+        for arg in args {
+            let reg = self.gen_expression(arg);
+            let arg_reg = self.regs.get_next_arg_reg();
+            self.emit(format!("addi {arg_reg},{reg},0"));
+            self.regs.free(reg);
+        }
+
+        self.emit(format!("call {name}"));
+        // move return value from a0 into temp reg
+        let reg = self.regs.alloc();
+        self.emit(format!("addi {reg},a0,0"));
+        reg
     }
 }
 

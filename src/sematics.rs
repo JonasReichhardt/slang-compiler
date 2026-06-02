@@ -55,7 +55,7 @@ impl SemanticAnalyzer {
         for decl in decls {
             self.analyze_declaration(decl);
             if let Declaration::Fn(func_dec) = decl {
-                if func_dec.name == "main" && matches!(func_dec.ret, Type::Int) {
+                if func_dec.name == "main" {
                     found_main = true;
                 }
             }
@@ -80,11 +80,7 @@ impl SemanticAnalyzer {
                 ) {
                     self.error(format!("Duplicate variable {name}"));
                 }
-                // global variables location are set here.
-                // local variables location are set in Declaration::Fn
-                if self.symbols.is_global(name) {
-                    *loc = Some(VarLocation::Global(name.to_string()));
-                }
+                *loc = Some(VarLocation::Global(name.to_string()));
             }
 
             Declaration::Fn(FuncDecl {
@@ -109,30 +105,34 @@ impl SemanticAnalyzer {
                 self.symbols.enter_scope();
 
                 // parameters
-                for (pname, ptype) in params {
+                let mut cur_offset: i32 = 8;
+                for var in params {
                     if !self.symbols.insert(
-                        pname.clone(),
+                        var.name.clone(),
                         Symbol::Var {
-                            typ: *ptype,
-                            loc: VarLocation::Stack(-8),
+                            typ: var.typ,
+                            loc: VarLocation::Stack(cur_offset),
                         },
                     ) {
-                        self.error(format!("Redefined parameter {pname}"));
+                        self.error(format!("Redefined parameter {}", var.name));
                     }
+                    var.loc = Some(VarLocation::Stack(cur_offset));
+                    cur_offset += 8;
                 }
 
-                let var_size: i32 = 8;
                 // local variables
-                for (idx, decl) in locals.iter_mut().enumerate() {
+                for decl in locals {
                     if !self.symbols.insert(
                         decl.name.clone(),
                         Symbol::Var {
                             typ: decl.typ,
-                            loc: VarLocation::Stack((idx as i32 + 1) * var_size),
+                            loc: VarLocation::Stack(cur_offset),
                         },
                     ) {
                         self.error(format!("Redefined local variable {}", decl.name));
                     }
+                    decl.loc = Some(VarLocation::Stack(cur_offset));
+                    cur_offset += 8;
                 }
 
                 // analyze body
@@ -348,10 +348,10 @@ impl SemanticAnalyzer {
             return Type::Error;
         }
 
-        for (arg, (_, expected)) in args.iter_mut().zip(params.iter()) {
+        for (arg, expected) in args.iter_mut().zip(params.iter()) {
             let actual = self.analyze_expr(arg);
 
-            if actual != *expected && actual != Type::Error {
+            if actual != expected.typ && actual != Type::Error {
                 self.error(format!(
                     "Function {name} expected argument type {expected:?}, got {actual:?}"
                 ));

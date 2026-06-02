@@ -318,4 +318,29 @@ mod codegen_tests {
         ";
         assert_eq!(compile_and_run(code), 0);
     }
+
+    #[test]
+    fn test_put_ln() {
+        let code = "
+            fn main(): int {
+                putLn();
+                return 0;
+            }
+        ";
+        assert_eq!(compile_and_run(code), 0);
+    }
+
+    #[test]
+    fn test_basic_fn_call() {
+        let code = "
+            fn add(x: int, y: int): int{
+                return x+y;
+            }
+
+            fn main(): int {
+                return add(10,10);
+            }
+        ";
+        assert_eq!(compile_and_run(code), 20);
+    }
 }

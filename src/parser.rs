@@ -5,7 +5,7 @@
 use crate::Scanner;
 use crate::structs::*;
 
-type FnSignature = (Vec<(String, Type)>, Type);
+type FnSignature = (Vec<VarDecl>, Type);
 
 #[derive(Debug, Clone)]
 pub struct ParseError {
@@ -168,7 +168,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_parameters(&mut self) -> Result<FnSignature, ()> {
-        let mut params = Vec::new();
+        let mut params: Vec<VarDecl> = Vec::new();
 
         self.expect(Token::LParen);
         if self.current.token != Token::RParen {
@@ -176,7 +176,11 @@ impl<'a> Parser<'a> {
                 let name = self.expect_ident();
                 self.expect(Token::Colon);
                 let ty = self.expect_ident();
-                params.push((name, ty.into()));
+                params.push(VarDecl {
+                    name,
+                    typ: ty.into(),
+                    loc: None,
+                });
 
                 if self.current.token != Token::Comma {
                     break;

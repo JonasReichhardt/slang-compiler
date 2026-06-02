@@ -22,19 +22,26 @@ fn main() {
     let src_str = fs::read_to_string(&path).expect("slang: could not read file");
     let scanner = Scanner::new(&src_str);
     let mut parser = Parser::new(scanner);
-    let ast = parser.parse_program();
-    if ast.is_ok() {
-        let mut semantics = SemanticAnalyzer::new();
-        let res = semantics.analyze_program(&mut ast.unwrap());
-        semantics.print_warnings();
-        if !res {
-            semantics.print_errors();
+
+    match parser.parse_program() {
+        Ok(mut ast) => {
+            let mut semantics = SemanticAnalyzer::new();
+            let res = semantics.analyze_program(&mut ast);
+            semantics.print_warnings();
+            if !res {
+                semantics.print_errors();
+                return;
+            }
+            let mut cg = Codegen::new();
+            let asm = cg.generate_asm(&ast);
+            println!("ASM:");
+            println!("{asm}");
         }
-    } else {
-        let errors = ast.err().unwrap();
-        for err in &errors {
-            println!("{err}");
+        Err(errors) => {
+            for err in &errors {
+                println!("{err}");
+            }
+            println!("slang: Compilation failed with {} errors.", errors.len());
         }
-        println!("slang: Compilation failed with {} errors.", errors.len());
     }
 }

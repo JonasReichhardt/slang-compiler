@@ -158,7 +158,7 @@ pub enum Declaration {
     Fn(FuncDecl),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VarDecl {
     pub name: String,
     pub typ: Type,
@@ -168,7 +168,7 @@ pub struct VarDecl {
 #[derive(Debug)]
 pub struct FuncDecl {
     pub name: String,
-    pub params: Vec<(String, Type)>,
+    pub params: Vec<VarDecl>,
     pub ret: Type,
     pub locals: Vec<VarDecl>,
     pub body: Vec<Statement>,
