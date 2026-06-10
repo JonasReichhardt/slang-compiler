@@ -99,8 +99,7 @@ impl Codegen {
         Self {
             code: vec![
                 format!(".global _start"),
-                format!(".section .bss"),
-                format!("put_buf: .space 1"),
+                format!("[BUILTINS]"), // placeholder for optional bss segment
                 format!(".text"),
                 format!("_start:"),
                 format!("addi sp,sp,-16"),
@@ -161,12 +160,24 @@ impl Codegen {
     }
 
     pub fn generate_asm(&mut self, ast: &[Declaration], sym: &SymbolTable) -> String {
+        // Generate code
         for decl in ast {
             self.gen_decl(decl);
         }
-        self.glob_data.append(&mut self.code);
-        self.glob_data.append(&mut builtin_funcs(sym));
-        let asm = self.glob_data.join("\n");
+
+        let mut code = self.glob_data.clone();
+
+        let mut builtins = builtin_funcs(sym);
+        // if builtins are used add bss segment
+        if builtins.is_empty() {
+            self.code[1] = format!("\n");
+        } else {
+            self.code[1] = format!(".section .bss\nput_buf: .space 1");
+        }
+        code.append(&mut self.code);
+        code.append(&mut builtins);
+
+        let asm = code.join("\n");
         println!("ASM:");
         println!("{asm}");
         asm
