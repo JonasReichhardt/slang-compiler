@@ -1,7 +1,8 @@
-use crate::{Declaration, Expr, FuncDecl, Statement, UnaryOp, VarLocation};
-use std::fmt;
+use crate::{Declaration, Expr, FuncDecl, Statement, UnaryOp, VarLocation, symtab::SymbolTable};
+use std::{collections::HashMap, fmt};
 
 #[rustfmt::skip]
+#[derive(Debug, Clone,PartialEq)]
 enum Register { T0,T1,T2,T3,T4,T5,T6,A0,A1,A2,A3,A4,A5,A6,A7}
 
 impl fmt::Display for Register {
@@ -26,14 +27,14 @@ impl fmt::Display for Register {
 impl Register {
     pub fn get_arg_reglist() -> Vec<Register> {
         vec![
-            Register::A0,
-            Register::A1,
-            Register::A2,
-            Register::A3,
-            Register::A4,
-            Register::A5,
-            Register::A6,
             Register::A7,
+            Register::A6,
+            Register::A5,
+            Register::A4,
+            Register::A3,
+            Register::A2,
+            Register::A1,
+            Register::A0,
         ]
     }
 
@@ -51,14 +52,16 @@ impl Register {
 }
 
 struct RegisterAllocator {
-    free: Vec<Register>,
-    args: Vec<Register>,
+    free: Vec<Register>,  // Currently free temp regs
+    tregs: Vec<Register>, // All temp regs
+    args: Vec<Register>,  // All argument regs
 }
 
 impl RegisterAllocator {
     #[rustfmt::skip]
     pub fn new() -> RegisterAllocator {
         Self {
+            tregs: Register::get_temp_reglist(),
             free: Register::get_temp_reglist(),
             args: Register::get_arg_reglist(),
         }
@@ -70,7 +73,9 @@ impl RegisterAllocator {
     }
 
     pub fn free(&mut self, reg: Register) {
-        self.free.push(reg);
+        if self.tregs.contains(&reg) {
+            self.free.push(reg);
+        }
     }
 
     pub fn get_next_arg_reg(&mut self) -> Register {
@@ -86,7 +91,6 @@ impl RegisterAllocator {
 pub struct Codegen {
     code: Vec<String>,
     glob_data: Vec<String>,
-    builtin_func: Vec<String>,
     regs: RegisterAllocator,
 }
 
@@ -108,7 +112,6 @@ impl Codegen {
                 format!("ecall"),
             ],
             glob_data: Vec::new(),
-            builtin_func: builtin_funcs(),
             regs: RegisterAllocator::new(),
         }
     }
@@ -157,12 +160,12 @@ impl Codegen {
         self.code.push(text.into());
     }
 
-    pub fn generate_asm(&mut self, ast: &[Declaration]) -> String {
+    pub fn generate_asm(&mut self, ast: &[Declaration], sym: &SymbolTable) -> String {
         for decl in ast {
             self.gen_decl(decl);
         }
         self.glob_data.append(&mut self.code);
-        self.glob_data.append(&mut self.builtin_func);
+        self.glob_data.append(&mut builtin_funcs(sym));
         let asm = self.glob_data.join("\n");
         println!("ASM:");
         println!("{asm}");
@@ -305,6 +308,7 @@ impl Codegen {
             self.emit(format!("addi {arg_reg},{reg},0"));
             self.regs.free(reg);
         }
+        self.regs.reset_arg_regs();
 
         self.emit(format!("call {name}"));
         // move return value from a0 into temp reg
@@ -323,8 +327,28 @@ fn get_stack_frame(num_vars: usize) -> i32 {
     ((frame_size + 15) / 16) * 16
 }
 
-fn builtin_funcs() -> Vec<String> {
-    let ret = vec![
+fn builtin_funcs(sym: &SymbolTable) -> Vec<String> {
+    let mut ret: Vec<String> = Vec::new();
+    let builtints = HashMap::from([("put".to_string(), put()), ("putLn".to_string(), put_ln())]);
+    for func in &sym.builtins_used {
+        let mut code = String::new();
+        if func == "putLn" {
+            //putLn needs put
+            code.push_str(&put());
+            code.push_str("\n");
+        }
+        code.push_str(
+            builtints
+                .get(func)
+                .expect("Builtin function does not have and implementation"),
+        );
+        ret.push(code);
+    }
+    ret
+}
+
+fn put() -> String {
+    vec![
         format!("put:"),
         format!("addi sp,sp,-16"),
         format!("sd ra,8(sp)"),
@@ -338,6 +362,12 @@ fn builtin_funcs() -> Vec<String> {
         format!("ld ra,8(sp)"),
         format!("addi sp,sp,16"),
         format!("ret"),
+    ]
+    .join("\n")
+}
+
+fn put_ln() -> String {
+    vec![
         format!("putLn:"),
         format!("addi sp, sp, -16"),
         format!("sd ra, 8(sp)"),
@@ -346,6 +376,6 @@ fn builtin_funcs() -> Vec<String> {
         format!("ld ra, 8(sp)"),
         format!("addi sp, sp, 16"),
         format!("ret"),
-    ];
-    ret
+    ]
+    .join("\n")
 }

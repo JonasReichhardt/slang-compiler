@@ -33,7 +33,7 @@ fn main() {
                 return;
             }
             let mut cg = Codegen::new();
-            let asm = cg.generate_asm(&ast);
+            let asm = cg.generate_asm(&ast, &semantics.symbols);
             println!("ASM:");
             println!("{asm}");
         }

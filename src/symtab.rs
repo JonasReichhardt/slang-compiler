@@ -22,7 +22,8 @@ impl std::fmt::Display for Symbol {
 #[derive(Debug, Clone)]
 pub struct SymbolTable {
     scopes: Vec<Scope>,
-    builtin: Scope,
+    builtins: Scope,
+    pub builtins_used: Vec<String>,
 }
 
 // creates symbols for the builtin functions
@@ -84,10 +85,11 @@ impl Default for SymbolTable {
 
 impl SymbolTable {
     pub fn new() -> Self {
-        let builtin = create_global_scope();
+        let builtins = create_global_scope();
         Self {
-            scopes: vec![builtin.clone()],
-            builtin,
+            scopes: vec![builtins.clone()],
+            builtins,
+            builtins_used: Vec::new(),
         }
     }
 
@@ -109,17 +111,16 @@ impl SymbolTable {
         true
     }
 
-    pub fn lookup(&self, name: &str) -> Option<&Symbol> {
+    pub fn lookup(&mut self, name: &str) -> Option<&Symbol> {
         for scope in self.scopes.iter().rev() {
+            if self.is_builtin(name) && !self.builtins_used.contains(&name.to_string()) {
+                self.builtins_used.push(name.to_string());
+            }
             if let Some(s) = scope.get(name) {
                 return Some(s);
             }
         }
         None
-    }
-
-    pub fn is_builtin(&self, name: &str) -> bool {
-        self.builtin.contains_key(name)
     }
 
     // checks if a variable is in the global scope
@@ -129,5 +130,12 @@ impl SymbolTable {
             .first()
             .expect("Could not retrieve global scope");
         global_scope.get(name).is_some()
+    }
+
+    fn is_builtin(&self, name: &str) -> bool {
+        if self.is_global(name) {
+            return self.builtins.get(name).is_some();
+        }
+        return false;
     }
 }

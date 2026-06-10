@@ -6,7 +6,7 @@ pub struct SemanticError {
 }
 
 pub struct SemanticAnalyzer {
-    symbols: SymbolTable,
+    pub symbols: SymbolTable,
     errors: Vec<SemanticError>,
     warnings: Vec<String>,
 }

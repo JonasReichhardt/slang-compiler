@@ -43,7 +43,7 @@ mod codegen_tests {
         // ---------------------------------------------
 
         let mut cg = Codegen::new();
-        let asm = cg.generate_asm(&ast);
+        let asm = cg.generate_asm(&ast, &analyzer.symbols);
 
         link_run(asm)
     }
@@ -342,5 +342,27 @@ mod codegen_tests {
             }
         ";
         assert_eq!(compile_and_run(code), 20);
+    }
+
+    #[test]
+    fn test_multiple_fn_call() {
+        let code = "
+            fn add(x: int, y: int): int{
+                return x+y;
+            }
+
+            fn sub(x: int, y: int): int{
+                return x-y;
+            }
+
+            fn main(): int {
+                var num1: int;
+                var num2: int;
+                num1 = 10;
+                num2 = 5;
+                return add(num1,num2) - sub(num1,num2);
+            }
+        ";
+        assert_eq!(compile_and_run(code), 10);
     }
 }
