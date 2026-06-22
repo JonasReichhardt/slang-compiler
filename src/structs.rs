@@ -108,12 +108,39 @@ pub enum RelOp {
     Ge,
 }
 
+impl fmt::Display for RelOp {
+    #[rustfmt::skip]
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+
+        let name = match self {
+            RelOp::Eq => "bne", RelOp::Neq => "beq", RelOp::Lt => "bge",
+            RelOp::Le => "bgt", RelOp::Gt => "ble", RelOp::Ge => "blt"
+        };
+
+        write!(f, "{name}")
+    }
+}
+
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type {
     Int,
     Char,
     Void,
     Error,
+}
+
+impl Type {
+    pub fn get_size(&mut self) -> u8 {
+        match self {
+            Self::Int => 8,
+            Self::Char => 1,
+            _ => 0,
+        }
+    }
 }
 
 impl From<String> for Type {
@@ -148,8 +175,8 @@ pub enum Statement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum VarLocation {
-    Stack(i32),
-    Global(String),
+    Stack((u8, i32)),
+    Global((u8, String)),
 }
 
 #[derive(Debug)]

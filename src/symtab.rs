@@ -134,8 +134,8 @@ impl SymbolTable {
 
     fn is_builtin(&self, name: &str) -> bool {
         if self.is_global(name) {
-            return self.builtins.get(name).is_some();
+            return self.builtins.contains_key(name);
         }
-        return false;
+        false
     }
 }

@@ -1,9 +1,12 @@
-use crate::{Declaration, Expr, FuncDecl, Statement, UnaryOp, VarLocation, symtab::SymbolTable};
-use std::{collections::HashMap, fmt};
+use crate::{
+    Condition, Declaration, Expr, FuncDecl, Statement, UnaryOp, VarDecl, VarLocation,
+    symtab::SymbolTable,
+};
+use std::fmt;
 
 #[rustfmt::skip]
 #[derive(Debug, Clone,PartialEq)]
-enum Register { T0,T1,T2,T3,T4,T5,T6,A0,A1,A2,A3,A4,A5,A6,A7}
+enum Register { T0,T1,T2,T3,T4,T5,T6,A0,A1,A2,A3,A4,A5,A6,A7,Zero}
 
 impl fmt::Display for Register {
     #[rustfmt::skip]
@@ -18,6 +21,7 @@ impl fmt::Display for Register {
             Register::T6 => "t6",Register::A0 => "a0",Register::A1 => "a1",
             Register::A2 => "a2",Register::A3 => "a3",Register::A4 => "a4",
             Register::A5 => "a5",Register::A6 => "a6",Register::A7 => "a7",
+            Register::Zero => "zero",
         };
 
         write!(f, "{name}")
@@ -68,8 +72,7 @@ impl RegisterAllocator {
     }
 
     pub fn alloc(&mut self) -> Register {
-        let reg = self.free.pop().expect("RegisterAllocator out of regs");
-        reg
+        self.free.pop().expect("RegisterAllocator out of regs")
     }
 
     pub fn free(&mut self, reg: Register) {
@@ -92,6 +95,13 @@ pub struct Codegen {
     code: Vec<String>,
     glob_data: Vec<String>,
     regs: RegisterAllocator,
+    next_label: usize,
+}
+
+impl Default for Codegen {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Codegen {
@@ -112,28 +122,42 @@ impl Codegen {
             ],
             glob_data: Vec::new(),
             regs: RegisterAllocator::new(),
+            next_label: 0,
         }
     }
 
-    fn emit_glob_var(&mut self, name: &str) {
+    fn get_label(&mut self) -> String {
+        let label = format!(".L{}", self.next_label);
+        self.next_label += 1;
+        label
+    }
+
+    fn emit_glob_var(&mut self, name: &str, size: &u8) {
         // emit a .data segment
         if self.glob_data.is_empty() {
             self.glob_data.push(".data".to_string());
         }
-        self.glob_data.push(format!("{name}: .quad 0"));
+        let cmd = match size {
+            1 => ".byte",
+            8 => ".quad",
+            _ => unreachable!(),
+        };
+        self.glob_data.push(format!("{name}: {cmd} 0"));
     }
 
     // stores the variable value inside the register into the given location
     // frees the register aftwerwards
     fn store(&mut self, reg: Register, loc: &VarLocation) {
         match loc {
-            VarLocation::Stack(offset) => {
-                self.emit(format!("sd {reg}, {}(sp)", offset));
+            VarLocation::Stack((size, offset)) => {
+                let cmd = get_load_cmd(size);
+                self.emit(format!("s{cmd} {reg}, {offset}(sp)"));
             }
-            VarLocation::Global(label) => {
+            VarLocation::Global((size, label)) => {
                 let addr = self.regs.alloc();
+                let cmd = get_load_cmd(size);
                 self.emit(format!("la {addr},{label}"));
-                self.emit(format!("sd {reg},0({addr})"));
+                self.emit(format!("s{cmd} {reg},0({addr})"));
             }
         }
         self.regs.free(reg);
@@ -143,13 +167,15 @@ impl Codegen {
     fn load(&mut self, loc: &VarLocation) -> Register {
         let reg = self.regs.alloc();
         match loc {
-            VarLocation::Stack(offset) => {
-                self.emit(format!("ld {reg},{}(sp)", offset));
+            VarLocation::Stack((size, offset)) => {
+                let cmd = get_load_cmd(size);
+                self.emit(format!("l{cmd} {reg},{offset}(sp)"));
             }
-            VarLocation::Global(label) => {
+            VarLocation::Global((size, label)) => {
                 let addr = self.regs.alloc();
+                let cmd = get_load_cmd(size);
                 self.emit(format!("la {addr},{label}"));
-                self.emit(format!("ld {reg},0({addr})"));
+                self.emit(format!("l{cmd} {reg},0({addr})"));
             }
         }
         reg
@@ -170,24 +196,21 @@ impl Codegen {
         let mut builtins = builtin_funcs(sym);
         // if builtins are used add bss segment
         if builtins.is_empty() {
-            self.code[1] = format!("\n");
+            self.code[1] = "\n".to_string();
         } else {
-            self.code[1] = format!(".section .bss\nput_buf: .space 1");
+            self.code[1] = ".section .bss\nput_buf: .space 1".to_string();
         }
         code.append(&mut self.code);
         code.append(&mut builtins);
 
-        let asm = code.join("\n");
-        println!("ASM:");
-        println!("{asm}");
-        asm
+        code.join("\n")
     }
 
-    fn gen_func_prologue(&mut self, func: &FuncDecl) {
-        let var_num = func.locals.len() + func.params.len();
-        let stack_frame_size: i32 = get_stack_frame(var_num.try_into().unwrap());
-        self.emit(format!("addi sp,sp,-{}", stack_frame_size));
-        self.emit(format!("sd ra,0(sp)")); // preserve ra
+    fn gen_func_prologue(&mut self, func: &FuncDecl, frame_size: usize) {
+        self.emit(format!("addi sp,sp,-{frame_size}"));
+        self.emit("sd ra,0(sp)".to_string()); // preserve ra
+        self.emit("sd s0,8(sp)".to_string()); // preserve s0
+        self.emit("sd s1,16(sp)".to_string()); // preserve s1
 
         // spill function arguments onto stack
         for param in &func.params {
@@ -201,21 +224,18 @@ impl Codegen {
 
         // create space for local variables
         for local in &func.locals {
-            match &local.loc {
-                Some(loc) => match loc {
-                    VarLocation::Stack(offset) => self.emit(format!("sd zero,{}(sp)", offset)),
-                    VarLocation::Global(_) => unreachable!(),
-                },
+            match local.loc.clone() {
+                Some(loc) => self.store(Register::Zero, &loc),
                 None => unreachable!(),
-            };
+            }
         }
     }
 
-    fn gen_func_epilogue(&mut self, func: &FuncDecl) {
-        let var_num = func.locals.len() + func.params.len();
-        let stack_frame_size: i32 = get_stack_frame(var_num.try_into().unwrap());
-        self.emit(format!("ld ra,0(sp)")); // restore ra
-        self.emit(format!("addi sp,sp,{}", stack_frame_size));
+    fn gen_func_epilogue(&mut self, frame_size: usize) {
+        self.emit("ld s1,16(sp)".to_string()); // preserve s1
+        self.emit("ld s0,8(sp)".to_string()); // preserve s0
+        self.emit("ld ra,0(sp)".to_string()); // restore ra
+        self.emit(format!("addi sp,sp,{frame_size}"));
         self.emit("ret");
     }
 
@@ -224,8 +244,10 @@ impl Codegen {
             Declaration::Fn(func) => {
                 self.emit(format!("{}:", func.name));
 
-                self.gen_func_prologue(func);
-
+                let stack_frame_size = get_stack_frame(
+                    get_bytes(func.locals.clone()) + get_bytes(func.params.clone()),
+                );
+                self.gen_func_prologue(func, stack_frame_size);
                 self.emit("  ");
 
                 for stmt in &func.body {
@@ -234,13 +256,11 @@ impl Codegen {
 
                 self.emit("  ");
 
-                self.gen_func_epilogue(&func);
+                self.gen_func_epilogue(stack_frame_size);
             }
             Declaration::Var(var) => match &var.loc {
-                Some(VarLocation::Global(_)) => self.emit_glob_var(&var.name),
-                // do nothing as everything regarding local var is done in the function declaration
-                Some(VarLocation::Stack(_)) => (),
-                None => unreachable!(),
+                Some(VarLocation::Global((size, _))) => self.emit_glob_var(&var.name, size),
+                _ => unreachable!(),
             },
         }
     }
@@ -266,8 +286,61 @@ impl Codegen {
                 let reg = self.gen_call(name, args);
                 self.regs.free(reg); // throw away result
             }
-            _ => todo!(),
+            Statement::If {
+                branches,
+                else_branch,
+            } => {
+                let end_label = self.get_label();
+
+                // generate all ifelse branches
+                for (cond, body) in branches {
+                    let next_label = self.get_label();
+
+                    self.gen_condition(cond, &next_label);
+
+                    for stmt in body {
+                        self.gen_statement(stmt);
+                    }
+
+                    self.emit(format!("j {end_label}"));
+                    self.emit(format!("{next_label}:"));
+                }
+
+                if let Some(else_body) = else_branch {
+                    for stmt in else_body {
+                        self.gen_statement(stmt);
+                    }
+                }
+
+                self.emit(format!("{end_label}:"));
+            }
+            Statement::While { cond, body } => {
+                let start_label = self.get_label();
+                let end_label = self.get_label();
+
+                self.emit(format!("{start_label}:"));
+
+                self.gen_condition(cond, &end_label);
+
+                for stmt in body {
+                    self.gen_statement(stmt);
+                }
+
+                self.emit(format!("j {start_label}"));
+
+                self.emit(format!("{end_label}:"));
+            }
         }
+    }
+
+    fn gen_condition(&mut self, cond: &Condition, flabel: &str) {
+        let left = self.gen_expression(&cond.left);
+        let right = self.gen_expression(&cond.right);
+
+        self.emit(format!("{} {},{},{}", cond.op, left, right, flabel));
+
+        self.regs.free(left);
+        self.regs.free(right);
     }
 
     // returns the register the expr result is stored in
@@ -301,8 +374,7 @@ impl Codegen {
             }
             Expr::Ident { name: _, loc } => {
                 if let Some(var_loc) = loc {
-                    let rd = self.load(var_loc);
-                    rd
+                    self.load(var_loc)
                 } else {
                     unreachable!()
                 }
@@ -312,6 +384,12 @@ impl Codegen {
     }
 
     fn gen_call(&mut self, name: &str, args: &Vec<Expr>) -> Register {
+        self.emit(format!("# {name}()"));
+
+        if name == "ORD" || name == "CHR" {
+            return self.gen_expression(args.first().unwrap());
+        }
+
         // move args into a0-a7 TODO: spill onto stack if more args
         for arg in args {
             let reg = self.gen_expression(arg);
@@ -324,43 +402,72 @@ impl Codegen {
         self.emit(format!("call {name}"));
         // move return value from a0 into temp reg
         let reg = self.regs.alloc();
-        self.emit(format!("addi {reg},a0,0"));
+        self.emit(format!("addi {reg},a0,0\n"));
         reg
     }
 }
 
 // calculates the stack frame size needed for the given number of bytes
-fn get_stack_frame(num_vars: usize) -> i32 {
-    if num_vars == 0 {
-        return 16;
-    }
-    let frame_size: i32 = (1 + num_vars as i32) * 8; // reserve one extra space for return addr
-    ((frame_size + 15) / 16) * 16
+fn get_stack_frame(bytes: usize) -> usize {
+    let frame_size: usize = bytes + (3 * 8); // reserve three extra space for ra, s0 and s1
+    frame_size.div_ceil(16) * 16
 }
 
+// calculates how many bytes are needed by the given VarDecls
+fn get_bytes(vars: Vec<VarDecl>) -> usize {
+    let mut bytes: usize = 0;
+    for mut var in vars {
+        bytes += var.typ.get_size() as usize;
+    }
+    bytes
+}
+
+fn get_load_cmd(size: &u8) -> char {
+    match size {
+        1 => 'b',
+        8 => 'd',
+        _ => unreachable!(),
+    }
+}
+
+// Checks if a builtin function is used and generates the asm accordingly
 fn builtin_funcs(sym: &SymbolTable) -> Vec<String> {
     let mut ret: Vec<String> = Vec::new();
-    let builtints = HashMap::from([("put".to_string(), put()), ("putLn".to_string(), put_ln())]);
+    ret.push("\n# BUILTIN FUNCTIONS".to_string());
+    let mut put_gen = false;
     for func in &sym.builtins_used {
+        // skip intrinsic functions
+        if func == "CHR" || func == "ORD" {
+            continue;
+        }
+
         let mut code = String::new();
+
         if func == "putLn" {
             //putLn needs put
-            code.push_str(&put());
-            code.push_str("\n");
+            if !put_gen {
+                code.push_str(&put());
+                code.push('\n');
+                put_gen = true;
+            }
+            code.push_str(&put_ln());
+            code.push('\n');
         }
-        code.push_str(
-            builtints
-                .get(func)
-                .expect("Builtin function does not have and implementation"),
-        );
+        if func == "put" && !put_gen {
+            code.push_str(&put());
+            code.push('\n');
+            put_gen = true;
+        }
         ret.push(code);
     }
     ret
 }
 
 fn put() -> String {
-    vec![
+    [
         format!("put:"),
+        format!(".option push"),
+        format!(".option norelax"),
         format!("addi sp,sp,-16"),
         format!("sd ra,8(sp)"),
         format!("la t0, put_buf"),
@@ -372,21 +479,22 @@ fn put() -> String {
         format!("ecall"),
         format!("ld ra,8(sp)"),
         format!("addi sp,sp,16"),
+        format!(".option pop"),
         format!("ret"),
     ]
     .join("\n")
 }
 
 fn put_ln() -> String {
-    vec![
-        format!("putLn:"),
-        format!("addi sp, sp, -16"),
-        format!("sd ra, 8(sp)"),
-        format!("li a0,10"),
-        format!("call put"),
-        format!("ld ra, 8(sp)"),
-        format!("addi sp, sp, 16"),
-        format!("ret"),
+    [
+        "putLn:".to_string(),
+        "addi sp, sp, -16".to_string(),
+        "sd ra, 8(sp)".to_string(),
+        "li a0,10".to_string(),
+        "call put".to_string(),
+        "ld ra, 8(sp)".to_string(),
+        "addi sp, sp, 16".to_string(),
+        "ret".to_string(),
     ]
     .join("\n")
 }

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <file.sl>"
+    exit 1
+fi
+
+INPUT="$1"
+BASE="${INPUT%.*}"
+
+ASM="${BASE}.s"
+OBJ="${BASE}"
+
+echo "[1/2] Compiling with slang..."
+target/release/slang "$INPUT" > "$ASM"
+
+echo "[2/2] Assembling..."
+riscv64-linux-gnu-gcc -nostdlib -static "$ASM" -o "$OBJ"
+
+echo
+echo "Generated assembly: $ASM"
+echo "Generated executable: $OBJ"
+echo
+echo "Run with:"
+echo "  qemu-riscv64 ./$OBJ"

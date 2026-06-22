@@ -75,12 +75,12 @@ impl SemanticAnalyzer {
                     name.clone(),
                     Symbol::Var {
                         typ: *typ,
-                        loc: VarLocation::Global(name.to_string()),
+                        loc: VarLocation::Global((typ.get_size(), name.to_owned())),
                     },
                 ) {
                     self.error(format!("Duplicate variable {name}"));
                 }
-                *loc = Some(VarLocation::Global(name.to_string()));
+                *loc = Some(VarLocation::Global((typ.get_size(), name.to_owned())));
             }
 
             Declaration::Fn(FuncDecl {
@@ -105,19 +105,20 @@ impl SemanticAnalyzer {
                 self.symbols.enter_scope();
 
                 // parameters
-                let mut cur_offset: i32 = 8;
+                let mut cur_offset: i32 = 24;
                 for var in params {
                     if !self.symbols.insert(
                         var.name.clone(),
                         Symbol::Var {
                             typ: var.typ,
-                            loc: VarLocation::Stack(cur_offset),
+                            loc: VarLocation::Stack((var.typ.get_size(), cur_offset)),
                         },
                     ) {
                         self.error(format!("Redefined parameter {}", var.name));
                     }
-                    var.loc = Some(VarLocation::Stack(cur_offset));
-                    cur_offset += 8;
+                    let var_size = var.typ.get_size();
+                    var.loc = Some(VarLocation::Stack((var_size, cur_offset)));
+                    cur_offset += var_size as i32;
                 }
 
                 // local variables
@@ -126,13 +127,14 @@ impl SemanticAnalyzer {
                         decl.name.clone(),
                         Symbol::Var {
                             typ: decl.typ,
-                            loc: VarLocation::Stack(cur_offset),
+                            loc: VarLocation::Stack((decl.typ.get_size(), cur_offset)),
                         },
                     ) {
                         self.error(format!("Redefined local variable {}", decl.name));
                     }
-                    decl.loc = Some(VarLocation::Stack(cur_offset));
-                    cur_offset += 8;
+                    let var_size = decl.typ.get_size();
+                    decl.loc = Some(VarLocation::Stack((var_size, cur_offset)));
+                    cur_offset += var_size as i32;
                 }
 
                 // analyze body

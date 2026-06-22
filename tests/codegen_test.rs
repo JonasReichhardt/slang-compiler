@@ -6,7 +6,7 @@
 mod codegen_tests {
     pub use slang::*;
     use std::fs;
-    use std::process::Command;
+    use std::process::{Command, Output};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn unique_name(prefix: &str) -> String {
@@ -18,7 +18,22 @@ mod codegen_tests {
         format!("{prefix}_{nanos}")
     }
 
-    fn compile_and_run(program: &str) -> i32 {
+    fn check_stdout(program: &str) -> String {
+        let res = compile_and_run(program);
+        let ret = String::from_utf8_lossy(&res.stdout);
+        let err = String::from_utf8_lossy(&res.stderr);
+        println!("STDOUT: {ret}");
+        println!("STDERR: {err}");
+        dbg!(res.status);
+        ret.into_owned()
+    }
+
+    fn check_ret(program: &str) -> i32 {
+        let res = compile_and_run(program);
+        res.status.code().unwrap_or(-1)
+    }
+
+    fn compile_and_run(program: &str) -> Output {
         let mut parser = Parser::new(Scanner::new(program));
         let parse_result = parser.parse_program();
 
@@ -48,10 +63,10 @@ mod codegen_tests {
         link_run(asm)
     }
 
-    fn link_run(asm: String) -> i32 {
+    fn link_run(asm: String) -> Output {
         let base = unique_name("test");
-        let asm_file = format!("/tmp/{base}.s");
-        let exe_file = format!("/tmp/{base}");
+        let asm_file = format!("tmp/{base}.s");
+        let exe_file = format!("tmp/{base}");
 
         fs::write(&asm_file, asm).expect("failed to write asm");
 
@@ -78,20 +93,16 @@ mod codegen_tests {
         // Run via qemu
         // ---------------------------------------------
 
-        let run = Command::new("qemu-riscv64")
+        Command::new("qemu-riscv64")
+            .arg("-strace")
             .arg(&exe_file)
             .output()
-            .expect("failed to execute qemu");
-
-        dbg!(run.stderr);
-        dbg!(run.stdout);
-        run.status.code().unwrap_or(-1)
+            .expect("failed to execute qemu")
     }
 
     #[test]
     fn test_setup() {
-        let code = format!(
-            ".global _start
+        let code = ".global _start
 
         .section .bss
         put_buffer:
@@ -117,9 +128,8 @@ mod codegen_tests {
             li a7, 64
             ecall
 
-            ret"
-        );
-        assert_eq!(link_run(code), 0);
+            ret".to_string();
+        assert_eq!(link_run(code).status.code().unwrap_or(-1), 0);
     }
 
     #[test]
@@ -129,7 +139,7 @@ mod codegen_tests {
                 return 42;
             }
         ";
-        assert_eq!(compile_and_run(code), 42);
+        assert_eq!(check_ret(code), 42);
     }
 
     #[test]
@@ -139,7 +149,7 @@ mod codegen_tests {
                 return 0;
             }
         ";
-        assert_eq!(compile_and_run(code), 0);
+        assert_eq!(check_ret(code), 0);
     }
 
     #[test]
@@ -149,7 +159,7 @@ mod codegen_tests {
                 return 5+10;
             }
         ";
-        assert_eq!(compile_and_run(code), 15);
+        assert_eq!(check_ret(code), 15);
     }
 
     #[test]
@@ -162,7 +172,7 @@ mod codegen_tests {
                 return x;
             }
         ";
-        assert_eq!(compile_and_run(code), 42);
+        assert_eq!(check_ret(code), 42);
     }
 
     #[test]
@@ -174,7 +184,7 @@ mod codegen_tests {
                 return x;
             }
         ";
-        assert_eq!(compile_and_run(code), 42);
+        assert_eq!(check_ret(code), 42);
     }
 
     #[test]
@@ -185,7 +195,7 @@ mod codegen_tests {
                 return y;
             }
         ";
-        assert_eq!(compile_and_run(code), 0);
+        assert_eq!(check_ret(code), 0);
     }
 
     #[test]
@@ -215,7 +225,7 @@ mod codegen_tests {
                 return y0+y1;
             }
         ";
-        assert_eq!(compile_and_run(code), 3);
+        assert_eq!(check_ret(code), 3);
     }
 
     #[test]
@@ -225,7 +235,7 @@ mod codegen_tests {
                 return 5+10;
             }
         ";
-        assert_eq!(compile_and_run(code), 15);
+        assert_eq!(check_ret(code), 15);
     }
 
     #[test]
@@ -235,7 +245,7 @@ mod codegen_tests {
                 return 10-5;
             }
         ";
-        assert_eq!(compile_and_run(code), 5);
+        assert_eq!(check_ret(code), 5);
     }
 
     #[test]
@@ -245,7 +255,7 @@ mod codegen_tests {
                 return 5*10;
             }
         ";
-        assert_eq!(compile_and_run(code), 50);
+        assert_eq!(check_ret(code), 50);
     }
 
     #[test]
@@ -255,7 +265,7 @@ mod codegen_tests {
                 return 50/10;
             }
         ";
-        assert_eq!(compile_and_run(code), 5);
+        assert_eq!(check_ret(code), 5);
     }
 
     #[test]
@@ -265,7 +275,7 @@ mod codegen_tests {
                 return 50%10;
             }
         ";
-        assert_eq!(compile_and_run(code), 0);
+        assert_eq!(check_ret(code), 0);
     }
 
     #[test]
@@ -275,7 +285,7 @@ mod codegen_tests {
                 return 1+10*5;
             }
         ";
-        assert_eq!(compile_and_run(code), 51);
+        assert_eq!(check_ret(code), 51);
     }
 
     #[test]
@@ -285,7 +295,7 @@ mod codegen_tests {
                 return (1+10)*5;
             }
         ";
-        assert_eq!(compile_and_run(code), 55);
+        assert_eq!(check_ret(code), 55);
     }
 
     #[test]
@@ -295,7 +305,7 @@ mod codegen_tests {
                 return -5;
             }
         ";
-        assert_eq!(compile_and_run(code), 4);
+        assert_eq!(check_ret(code), 4);
     }
 
     #[test]
@@ -305,7 +315,7 @@ mod codegen_tests {
               return 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8;
             }
         ";
-        assert_eq!(compile_and_run(code), 36);
+        assert_eq!(check_ret(code), 36);
     }
 
     #[test]
@@ -316,7 +326,7 @@ mod codegen_tests {
                 return 0;
             }
         ";
-        assert_eq!(compile_and_run(code), 0);
+        assert_eq!(check_ret(code), 0);
     }
 
     #[test]
@@ -327,7 +337,7 @@ mod codegen_tests {
                 return 0;
             }
         ";
-        assert_eq!(compile_and_run(code), 0);
+        assert_eq!(check_ret(code), 0);
     }
 
     #[test]
@@ -341,28 +351,124 @@ mod codegen_tests {
                 return add(10,10);
             }
         ";
-        assert_eq!(compile_and_run(code), 20);
+        assert_eq!(check_ret(code), 20);
     }
 
     #[test]
-    fn test_multiple_fn_call() {
+    fn test_multiple_fn_calls() {
         let code = "
             fn add(x: int, y: int): int{
                 return x+y;
             }
 
-            fn sub(x: int, y: int): int{
-                return x-y;
+            fn main(): int {
+                var n1: int;
+                var n2: int;
+                var n3: int;
+                var n4: int;
+                n1 = 5;
+                n2 = 10;
+                n3 = add(n1,n2);
+                n4 = add(n1,n3);
+                n1 = add(n2,n3);
+                n2 = add(n3,n4);
+                return n1+n2+n3+n4;
+            }
+        ";
+        //15+20+25+35
+        assert_eq!(check_ret(code), 95);
+    }
+
+    #[test]
+    fn test_multiple_fn_expr() {
+        let code = "
+            fn foo(x: int): int{
+                return x;
             }
 
             fn main(): int {
-                var num1: int;
-                var num2: int;
-                num1 = 10;
-                num2 = 5;
-                return add(num1,num2) - sub(num1,num2);
+                return foo(foo(foo(foo(foo(foo(foo(foo(foo(foo(foo(foo(5))))))))))));
             }
         ";
-        assert_eq!(compile_and_run(code), 10);
+        assert_eq!(check_ret(code), 5);
+    }
+
+    #[test]
+    fn test_stdout() {
+        let code = "
+            fn main(): void {
+                var c: char;
+                c = '1';
+                put(c);
+                putLn();
+            }
+        ";
+        assert_eq!(check_stdout(code), "1\n");
+    }
+
+    #[test]
+    fn test_if() {
+        let code = "
+            fn main(): void {
+                var c: char;
+                c = '1';
+                if(c > '0'){
+                    c='2';
+                }
+                put(c);
+                putLn();
+            }
+        ";
+        assert_eq!(check_stdout(code), "2\n");
+    }
+
+    #[test]
+    fn test_chr() {
+        let code = "
+            fn main(): void {
+                var a: int;
+                a = 65;
+                while(a<70){
+                    put(CHR(a));
+                    putLn();
+                    a=a+1;
+                }
+            }
+        ";
+        assert_eq!(check_stdout(code), "A\nB\nC\nD\nE\n");
+    }
+
+    #[test]
+    fn test_final() {
+        let code = "
+            var i: int;
+
+            fn putInt(x: int): void {
+                var c0: char;
+                var c1: char;
+                var c2: char;
+                var c3: char;
+
+                c3 = CHR(48 + x % 10); x = x / 10;
+                c2 = CHR(48 + x % 10); x = x / 10;
+                c1 = CHR(48 + x % 10); x = x / 10;
+                c0 = CHR(48 + x % 10);
+
+                if (c0 > '0') { put(c0); put(c1); put(c2); }
+                elseif (c1 > '0') { put(c1); put(c2); }
+                elseif (c2 > '0') { put(c2); }
+                put(c3);
+            }
+
+            fn main(): void { /* print odd numbers */
+    i = 1;
+                while (i < 10) {
+                    putInt(i);
+                    putLn();
+                    i = i + 2;
+                }
+            }
+        ";
+        assert_eq!(check_stdout(code), "1\n3\n5\n7\n9\n");
     }
 }

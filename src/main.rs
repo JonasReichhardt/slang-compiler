@@ -34,8 +34,9 @@ fn main() {
             }
             let mut cg = Codegen::new();
             let asm = cg.generate_asm(&ast, &semantics.symbols);
-            println!("ASM:");
-            println!("{asm}");
+            let mut asm_file = path.clone();
+            asm_file.set_extension("s");
+            fs::write(&asm_file, asm).expect("failed to write asm");
         }
         Err(errors) => {
             for err in &errors {

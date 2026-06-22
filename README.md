@@ -1,6 +1,12 @@
 # slang
 machine-code compiler for a simple C-like programming language
 
+## List of improvements
++ Spill arguments to stack if a0-a7 is not enough
++ Save method call result in s0-sX registers if another method is called
++ Use a more efficient stack layout for different sized variables
++ Stress test compiler (recursive descent)
+
 ## Example program
 
 ```c
