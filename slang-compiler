@@ -12,16 +12,21 @@ BASE="${INPUT%.*}"
 
 ASM="${BASE}.s"
 OBJ="${BASE}"
+DMP="${BASE}.dump"
 
-echo "[1/2] Compiling with slang..."
+echo "[1/3] Compiling with slang..."
 target/release/slang "$INPUT" > "$ASM"
 
-echo "[2/2] Assembling..."
+echo "[2/3] Assembling..."
 riscv64-linux-gnu-gcc -nostdlib -static "$ASM" -o "$OBJ"
+
+echo "[3/3] Generating objdump"
+riscv32-unknown-elf-objdump -d "$OBJ" > "$DMP"
 
 echo
 echo "Generated assembly: $ASM"
 echo "Generated executable: $OBJ"
+echo "Generated executable: $DMP"
 echo
 echo "Run with:"
 echo "  qemu-riscv64 ./$OBJ"

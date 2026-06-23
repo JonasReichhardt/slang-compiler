@@ -233,10 +233,6 @@ impl<'a> Scanner<'a> {
                 return self.next_token();
             }
         };
-        SpannedToken {
-            token,
-            line,
-            col,
-        }
+        SpannedToken { token, line, col }
     }
 }

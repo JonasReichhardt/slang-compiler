@@ -128,7 +128,8 @@ mod codegen_tests {
             li a7, 64
             ecall
 
-            ret".to_string();
+            ret"
+        .to_string();
         assert_eq!(link_run(code).status.code().unwrap_or(-1), 0);
     }
 
